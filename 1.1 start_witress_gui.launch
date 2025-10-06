@@ -1,0 +1,6 @@
+<launch>
+    <node name="robot_manager_node" pkg="waiterbot_gui" type="robot_manager.py" output="screen" />
+
+    <node name="gui_node" pkg="waiterbot_gui" type="gui_app.py" output="screen" />
+
+</launch>
