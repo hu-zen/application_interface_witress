@@ -64,3 +64,26 @@ Processing triggers for desktop-file-utils (0.24-1ubuntu3) ...
 Purging configuration files for nvidia-compute-utils-535 (535.129.03-0ubuntu0.20.04.1) ...
 Purging configuration files for nvidia-settings (470.57.01-0ubuntu0.20.04.3) ...
 
+python3 gui.py 
+[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-07_7.txt
+[INFO   ] [Kivy        ] v2.2.1
+[INFO   ] [Kivy        ] Installed at "/home/iascr/.local/lib/python3.8/site-packages/kivy/__init__.py"
+[INFO   ] [Python      ] v3.8.10 (default, May 26 2023, 14:05:08) 
+[GCC 9.4.0]
+[INFO   ] [Python      ] Interpreter at "/usr/bin/python3"
+[INFO   ] [Logger      ] Purge log fired. Processing...
+[INFO   ] [Logger      ] Purge finished!
+[INFO   ] [Factory     ] 190 symbols loaded
+[INFO   ] [Image       ] Providers: img_tex, img_dds, img_sdl2, img_pil (img_ffpyplayer ignored)
+ Traceback (most recent call last):
+   File "gui.py", line 50, in <module>
+     ControllerApp().run()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 955, in run
+     self._run_prepare()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 925, in _run_prepare
+     root = self.build()
+   File "gui.py", line 13, in build
+     self.manager = ControllerManager()
+ TypeError: __init__() missing 1 required positional argument: 'status_callback'
+
+
