@@ -1,0 +1,7 @@
+<launch>
+  <node name="controller_gui"
+        pkg="waiterbot_interface"
+        type="gui.py"
+        output="screen">
+  </node>
+</launch>
