@@ -1,0 +1,15 @@
+<package format="2">
+  <name>waiterbot_interface</name>
+  <version>1.0.0</version>
+  <description>
+    Paket antarmuka Kivy untuk Waiter Bot.
+  </description>
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
+</package>
+
+cmake_minimum_required(VERSION 3.0.2)
+project(waiterbot_interface)
+find_package(catkin REQUIRED)
+catkin_package()
