@@ -4,13 +4,17 @@
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
+from kivy.clock import mainthread # <-- Perubahan 1: Tambahkan import ini
 
 # Impor kelas manager dari file manager.py
 from manager import ControllerManager
 
 class ControllerApp(App):
     def build(self):
-        self.manager = ControllerManager()
+        # Perubahan 2: Saat membuat manager, kita berikan fungsi 'update_status_label'
+        # sebagai argumen callback.
+        self.manager = ControllerManager(status_callback=self.update_status_label)
+        
         kv_design = """
 BoxLayout:
     orientation: 'vertical'
@@ -37,14 +41,24 @@ BoxLayout:
         
     def handle_start(self):
         new_status = self.manager.start_controller()
-        self.root.ids.status_label.text = new_status
+        self.update_status_label(new_status)
 
     def handle_stop(self):
         new_status = self.manager.stop_controller()
-        self.root.ids.status_label.text = new_status
+        self.update_status_label(new_status)
             
     def on_stop(self):
         self.manager.shutdown()
+
+    # Perubahan 3: Tambahkan fungsi baru ini secara keseluruhan
+    @mainthread
+    def update_status_label(self, new_text):
+        """
+        Fungsi ini adalah satu-satunya yang boleh mengubah label.
+        Decorator @mainthread memastikan fungsi ini aman dipanggil dari thread lain.
+        """
+        if self.root: # Pastikan widget sudah dibuat
+            self.root.ids.status_label.text = new_text
 
 if __name__ == '__main__':
     ControllerApp().run()
