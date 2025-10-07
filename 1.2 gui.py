@@ -2,62 +2,44 @@
 # -*- coding: utf-8 -*-
 
 from kivy.app import App
-from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
-from kivy.clock import mainthread # Penting untuk update UI dari thread lain
+from kivy.uix.button import Button
+from kivy.uix.label import Label
 
-# Impor kelas manager dari file manager.py
-from manager import ControllerManager
-
-class ControllerApp(App):
+class TestApp(App):
     def build(self):
-        # Sekarang, saat membuat manager, kita berikan fungsi 'update_status_label'
-        # sebagai argumen callback.
-        self.manager = ControllerManager(status_callback=self.update_status_label)
+        # Membuat layout utama
+        layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
         
-        kv_design = """
-BoxLayout:
-    orientation: 'vertical'
-    padding: 40
-    spacing: 20
-
-    Label:
-        id: status_label
-        text: 'Status: Siap'
-        font_size: '20sp'
-        size_hint_y: 0.4
-
-    Button:
-        text: 'Mulai Mode Controller'
-        font_size: '22sp'
-        on_press: app.handle_start()
-
-    Button:
-        text: 'Stop Mode Controller'
-        font_size: '22sp'
-        on_press: app.handle_stop()
-"""
-        return Builder.load_string(kv_design)
+        # Membuat label
+        self.status_label = Label(text="Tekan sebuah tombol.", font_size='20sp')
         
-    def handle_start(self):
-        new_status = self.manager.start_controller()
-        self.update_status_label(new_status)
+        # Membuat tombol 1
+        btn1 = Button(text='Tombol Tes A', font_size='22sp')
+        btn1.bind(on_press=self.tombol_ditekan) # Menghubungkan tombol ke fungsi
+        
+        # Membuat tombol 2
+        btn2 = Button(text='Tombol Tes B', font_size='22sp')
+        btn2.bind(on_press=self.tombol_ditekan)
 
-    def handle_stop(self):
-        new_status = self.manager.stop_controller()
-        self.update_status_label(new_status)
-            
-    def on_stop(self):
-        self.manager.shutdown()
+        # Menambahkan semua widget ke layout
+        layout.add_widget(self.status_label)
+        layout.add_widget(btn1)
+        layout.add_widget(btn2)
+        
+        return layout
 
-    @mainthread
-    def update_status_label(self, new_text):
-        """
-        Fungsi ini adalah satu-satunya yang boleh mengubah label.
-        Decorator @mainthread memastikan fungsi ini aman dipanggil dari thread mana pun.
-        """
-        if self.root: # Pastikan widget sudah dibuat
-            self.root.ids.status_label.text = new_text
+    def tombol_ditekan(self, instance):
+        # Fungsi ini hanya akan mengubah teks label dan mencetak pesan ke terminal
+        pesan = f"--- Tombol '{instance.text}' Ditekan SATU KALI ---"
+        self.status_label.text = pesan
+        print(pesan)
 
 if __name__ == '__main__':
-    ControllerApp().run()
+    print("==========================================================")
+    print("Menjalankan Tes Kivy Murni.")
+    print("Perhatikan terminal. Jika pesan 'Ditekan SATU KALI' muncul")
+    print("berulang kali tanpa Anda menekan tombol, berarti ada masalah")
+    print("dengan instalasi Kivy atau hardware input Anda.")
+    print("==========================================================")
+    TestApp().run()
