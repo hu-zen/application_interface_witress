@@ -4,22 +4,19 @@
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
+from kivy.clock import mainthread # Penting untuk update UI dari thread lain
 
 # Impor kelas manager dari file manager.py
 from manager import ControllerManager
 
-class MainWidget(BoxLayout):
-    """Kelas ini terhubung ke desain .kv dan berisi logika UI."""
-    pass
-
 class ControllerApp(App):
     def build(self):
-        # Buat satu objek manager yang akan digunakan oleh seluruh aplikasi
-        self.manager = ControllerManager()
+        # Sekarang, saat membuat manager, kita berikan fungsi 'update_status_label'
+        # sebagai argumen callback.
+        self.manager = ControllerManager(status_callback=self.update_status_label)
         
-        # Desain antarmuka ditulis di sini
         kv_design = """
-MainWidget:
+BoxLayout:
     orientation: 'vertical'
     padding: 40
     spacing: 20
@@ -43,20 +40,24 @@ MainWidget:
         return Builder.load_string(kv_design)
         
     def handle_start(self):
-        """Fungsi ini dipanggil oleh tombol 'Mulai'."""
-        # GUI menyuruh manager untuk bekerja
         new_status = self.manager.start_controller()
-        # GUI memperbarui tampilan berdasarkan hasil dari manager
-        self.root.ids.status_label.text = new_status
+        self.update_status_label(new_status)
 
     def handle_stop(self):
-        """Fungsi ini dipanggil oleh tombol 'Stop'."""
         new_status = self.manager.stop_controller()
-        self.root.ids.status_label.text = new_status
+        self.update_status_label(new_status)
             
     def on_stop(self):
-        """Fungsi ini otomatis berjalan saat jendela aplikasi ditutup."""
         self.manager.shutdown()
+
+    @mainthread
+    def update_status_label(self, new_text):
+        """
+        Fungsi ini adalah satu-satunya yang boleh mengubah label.
+        Decorator @mainthread memastikan fungsi ini aman dipanggil dari thread mana pun.
+        """
+        if self.root: # Pastikan widget sudah dibuat
+            self.root.ids.status_label.text = new_text
 
 if __name__ == '__main__':
     ControllerApp().run()
