@@ -1,4 +1,4 @@
-# File: manager.py (Lokasi Save Peta Diperbarui)
+# File: manager.py (Versi Final dengan Controller + Mapping Terintegrasi)
 
 import subprocess
 import threading
@@ -31,7 +31,7 @@ class RosManager:
             print("INFO: Memulai roscore di latar belakang...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(3)
+                time.sleep(3) 
                 print("INFO: roscore seharusnya sudah berjalan.")
             except Exception as e:
                 print(f"FATAL: Gagal memulai roscore: {e}")
@@ -51,7 +51,7 @@ class RosManager:
                     print("ERROR: Proses mapping.launch berhenti tak terduga!")
                     self.is_mapping_running = False
                     self.mapping_process = None
-                    self.status_callback("mapping", "status_label", "Status: Gagal! Proses berhenti.")
+                    self.status_callback("mapping", "status_label", "Status: Gagal! Mapping berhenti.")
             
             time.sleep(1)
 
@@ -82,7 +82,12 @@ class RosManager:
             self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
             self.is_mapping_running = True
             print("INFO: Mode Mapping dimulai.")
-            return "Mode Pemetaan AKTIF.\nGunakan joystick & RViz."
+            
+            # ===== PERUBAHAN 1: Jalankan juga controller secara otomatis =====
+            print("INFO: Menjalankan controller untuk mapping...")
+            self.start_controller()
+            
+            return "Mode Pemetaan AKTIF.\nController juga aktif."
         return "Status: Mapping Sudah Aktif"
 
     def stop_mapping(self):
@@ -92,14 +97,16 @@ class RosManager:
             self.mapping_process = None
             self.is_mapping_running = False
             print("INFO: Mode Mapping dihentikan.")
+            
+            # ===== PERUBAHAN 2: Hentikan juga controller secara otomatis =====
+            print("INFO: Menghentikan controller...")
+            self.stop_controller()
+            
             return "Status: DIMATIKAN"
         return "Status: Memang tidak aktif"
 
-    # --- FUNGSI UNTUK MENYIMPAN PETA ---
     def save_map(self, map_name):
-        """Menyimpan peta ke folder 'autonomus_mobile_robot/maps'."""
         try:
-            # ==== PERUBAHAN 1: Ganti nama paket target ====
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
         except rospkg.ResourceNotFound:
             print("ERROR: Paket 'autonomus_mobile_robot' tidak ditemukan.")
@@ -109,9 +116,7 @@ class RosManager:
             print("ERROR: Nama peta tidak boleh kosong.")
             return False
 
-        # ==== PERUBAHAN 2: Ganti subfolder target menjadi 'maps' ====
         map_save_path = f"{pkg_path}/maps/{map_name}"
-        
         command = f"rosrun map_server map_saver -f {map_save_path}"
         
         print(f"INFO: Menyimpan peta ke {map_save_path}...")
