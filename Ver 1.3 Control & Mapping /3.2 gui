@@ -12,7 +12,7 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # Menggunakan layout asli Anda yang sudah stabil
+        # Menggunakan layout asli Anda
         kv_design = """
 ScreenManager:
     id: sm
@@ -24,8 +24,7 @@ ScreenManager:
             padding: 40
             spacing: 20
             Label:
-                # Label ini ditambahkan untuk menampilkan status roscore jika ada masalah
-                id: status_label 
+                id: status_label # ID ditambahkan untuk pesan error roscore
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
             Button:
@@ -103,10 +102,10 @@ ScreenManager:
         map_name = screen.ids.map_name_input.text
         
         if self.manager.save_map(map_name):
-            # Beri umpan balik bahwa terminal baru akan muncul
-            screen.ids.mapping_status_label.text = f"Membuka terminal baru untuk menyimpan peta '{map_name}'..."
+            # Umpan balik yang jelas sesuai ide Anda
+            screen.ids.mapping_status_label.text = f"Terminal baru dibuka untuk menyimpan peta '{map_name}'..."
         else:
-            screen.ids.mapping_status_label.text = "GAGAL menyimpan peta.\nPastikan nama peta diisi & ROS berjalan."
+            screen.ids.mapping_status_label.text = "GAGAL membuka terminal baru.\nPastikan nama peta diisi."
         
     def on_stop(self):
         self.manager.shutdown()
