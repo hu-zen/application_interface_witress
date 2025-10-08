@@ -1,66 +1,34 @@
 #!/usr/bin/env python3
-
-import rospy
 import subprocess
+import sys
 import os
 import rospkg
-# Gunakan service yang bisa mengirim string (nama file)
-from waiterbot_interface.srv import SaveMap, SaveMapResponse
 
-# Variabel global untuk menyimpan path paket tempat peta akan disimpan
-MAP_SAVE_PKG_PATH = ""
-
-def handle_save_map_request(req):
-    """Callback yang dipanggil saat service diminta."""
-    map_name = req.map_name
-    rospy.loginfo(f"Permintaan untuk menyimpan peta dengan nama '{map_name}' diterima.")
-    
-    if not map_name:
-        rospy.logerr("Nama peta kosong.")
-        return SaveMapResponse(success=False, message="Nama peta tidak boleh kosong.")
-        
-    if not MAP_SAVE_PKG_PATH:
-        rospy.logerr("Path paket 'autonomus_mobile_robot' tidak ditemukan.")
-        return SaveMapResponse(success=False, message="Paket 'autonomus_mobile_robot' tidak ditemukan.")
-
-    # Bentuk path lengkap untuk menyimpan peta di paket robot utama
-    map_save_path = os.path.join(MAP_SAVE_PKG_PATH, 'maps', map_name)
-    command = f"rosrun map_server map_saver -f {map_save_path}"
-    
-    rospy.loginfo(f"Menjalankan perintah: {command}")
-    
-    try:
-        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate(timeout=15)
-        
-        if process.returncode == 0:
-            msg = f"Peta '{map_name}' berhasil disimpan."
-            rospy.loginfo(msg)
-            return SaveMapResponse(success=True, message=msg)
-        else:
-            error_msg = stderr.decode('utf-8')
-            rospy.logerr(f"Gagal menyimpan peta. Error: {error_msg}")
-            return SaveMapResponse(success=False, message=error_msg)
-            
-    except Exception as e:
-        error_str = f"Exception saat menyimpan peta: {str(e)}"
-        rospy.logerr(error_str)
-        return SaveMapResponse(success=False, message=error_str)
-
-def map_saver_server():
-    global MAP_SAVE_PKG_PATH
-    rospy.init_node('map_saver_service_node')
-    
-    try:
-        rospack = rospkg.RosPack()
-        MAP_SAVE_PKG_PATH = rospack.get_path('autonomus_mobile_robot')
-    except rospkg.ResourceNotFound:
-        rospy.logfatal("FATAL: Paket 'autonomus_mobile_robot' tidak ditemukan.")
+def main():
+    """
+    Skrip ini menerima satu argumen (path lengkap untuk menyimpan peta)
+    dan membukanya di terminal baru.
+    """
+    if len(sys.argv) < 2:
+        print("Error: Argumen path file peta tidak diberikan.")
         return
 
-    s = rospy.Service('save_map', SaveMap, handle_save_map_request)
-    rospy.loginfo("Service 'save_map' siap.")
-    rospy.spin()
+    map_save_path = sys.argv[1]
+    
+    # Perintah untuk menjalankan map_saver
+    command = f"rosrun map_server map_saver -f {map_save_path}"
+    
+    # Perintah untuk membuka terminal baru (gnome-terminal) dan menjalankan perintah di dalamnya
+    # Opsi '--' memastikan sisa argumen diperlakukan sebagai perintah untuk dieksekusi
+    # Opsi 'bash -c "..."' memastikan perintah berjalan dan terminal tetap terbuka hingga selesai
+    full_terminal_command = f'gnome-terminal -- bash -c "{command}; echo \\"Proses selesai. Anda bisa menutup terminal ini.\\"; exec bash"'
 
-if __name__ == "__main__":
-    map_saver_server()
+    try:
+        print(f"Membuka terminal baru untuk menjalankan: {command}")
+        # Jalankan perintah untuk membuka terminal baru
+        subprocess.Popen(full_terminal_command, shell=True)
+    except Exception as e:
+        print(f"Gagal membuka terminal baru: {e}")
+
+if __name__ == '__main__':
+    main()
