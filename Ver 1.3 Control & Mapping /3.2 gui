@@ -5,7 +5,6 @@ from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
 from kivy.clock import mainthread
-
 from manager import RosManager
 
 class MainApp(App):
@@ -23,18 +22,14 @@ ScreenManager:
             padding: 40
             spacing: 20
             Label:
+                id: status_label
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
             Button:
-                text: 'Mode Controller'
+                text: 'Mulai Sesi Mapping'
                 font_size: '22sp'
-                on_press: app.go_to_controller_mode()
-            Button:
-                text: 'Mode Mapping'
-                font_size: '22sp'
-                on_press: sm.current = 'pre_mapping' # Pindah ke layar input nama peta
+                on_press: sm.current = 'pre_mapping'
 
-    # --- SCREEN BARU UNTUK INPUT NAMA PETA ---
     Screen:
         name: 'pre_mapping'
         BoxLayout:
@@ -46,96 +41,63 @@ ScreenManager:
                 font_size: '26sp'
             TextInput:
                 id: map_name_input
-                hint_text: 'Contoh: peta_lantai_1'
+                hint_text: 'Contoh: peta_lab_1'
                 font_size: '20sp'
                 multiline: False
                 size_hint_y: None
                 height: '48dp'
             Button:
-                text: 'Mulai Mapping'
+                text: 'Buka Terminal Mapping'
                 font_size: '22sp'
-                on_press: app.go_to_mapping_mode()
+                on_press: app.start_mapping_session()
             Button:
-                text: 'Kembali ke Menu'
+                text: 'Kembali'
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
 
     Screen:
-        name: 'controller'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 20
-            Label:
-                id: controller_status_label
-                text: 'Status: Siap'
-                font_size: '20sp'
-            Button:
-                text: 'Stop & Kembali ke Menu'
-                font_size: '22sp'
-                on_press: app.exit_controller_mode()
-            
-    Screen:
-        name: 'mapping'
+        name: 'mapping_in_progress'
         BoxLayout:
             orientation: 'vertical'
             padding: 40
             spacing: 20
             Label:
                 id: mapping_status_label
-                text: 'Status: Siap'
+                text: 'Sesi mapping sedang berlangsung di terminal lain...'
                 font_size: '20sp'
             Label:
                 id: current_map_name_label
-                text: 'Memetakan: '
-                font_size: '18sp'
-                color: 0.7, 0.7, 0.7, 1
+                font_size: '16sp'
             Button:
-                text: 'Selesai Mapping & Simpan Otomatis'
+                text: 'Selesai & Simpan Peta'
                 font_size: '22sp'
-                on_press: app.exit_mapping_mode()
+                on_press: app.stop_mapping_session()
 """
         return Builder.load_string(kv_design)
 
-    def go_to_controller_mode(self):
-        status = self.manager.start_controller()
-        self.update_status_label('controller', 'controller_status_label', status)
-        self.root.current = 'controller'
-
-    def exit_controller_mode(self):
-        self.manager.stop_controller()
-        self.root.current = 'main_menu'
-
-    def go_to_mapping_mode(self):
-        # Ambil nama peta dari layar 'pre_mapping'
-        pre_mapping_screen = self.root.get_screen('pre_mapping')
-        map_name = pre_mapping_screen.ids.map_name_input.text
+    def start_mapping_session(self):
+        screen = self.root.get_screen('pre_mapping')
+        map_name = screen.ids.map_name_input.text
 
         if not map_name.strip():
-            pre_mapping_screen.ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
+            screen.ids.map_name_input.hint_text = 'NAMA PETA WAJIB DIISI!'
             return
 
-        # Kirim nama peta ke manager dan mulai mapping
         status = self.manager.start_mapping(map_name)
         
-        # Update label di layar mapping
-        mapping_screen = self.root.get_screen('mapping')
-        mapping_screen.ids.mapping_status_label.text = status
-        mapping_screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
+        # Pindah ke layar "sedang mapping"
+        in_progress_screen = self.root.get_screen('mapping_in_progress')
+        in_progress_screen.ids.mapping_status_label.text = status
+        in_progress_screen.ids.current_map_name_label.text = f"Peta akan disimpan sebagai: {map_name}"
+        self.root.current = 'mapping_in_progress'
+
+    def stop_mapping_session(self):
+        status = self.manager.save_and_stop_mapping()
+        self.update_status_label('mapping_in_progress', 'mapping_status_label', status)
         
-        self.root.current = 'mapping'
-
-    def exit_mapping_mode(self):
-        # Manager akan menangani penyimpanan otomatis
-        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta dan menghentikan proses...')
-        # Memberi sedikit jeda agar pengguna bisa melihat pesan status
-        from kivy.clock import Clock
-        Clock.schedule_once(self._finish_exit_mapping, 2)
-
-    def _finish_exit_mapping(self, dt):
-        self.manager.stop_mapping()
+        # Kembali ke menu utama
         self.root.current = 'main_menu'
-        
+
     def on_stop(self):
         self.manager.shutdown()
 
