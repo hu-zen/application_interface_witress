@@ -34,11 +34,6 @@ ScreenManager:
                 text: 'Mode Mapping'
                 font_size: '22sp'
                 on_press: app.go_to_mapping_mode()
-            # Anda bisa menambahkan tombol 'Mode Navigasi' di sini nanti
-            # Button:
-            #     text: 'Mode Navigasi'
-            #     font_size: '22sp'
-            #     disabled: True # Aktifkan saat sudah siap
 
     Screen:
         name: 'controller'
@@ -102,21 +97,20 @@ ScreenManager:
         self.root.current = 'main_menu'
         
     def save_map(self):
-        """Hanya mengambil nama peta dari input dan memanggil manager."""
         screen = self.root.get_screen('mapping')
         map_name = screen.ids.map_name_input.text
         
-        # Panggil fungsi save_map di manager, yang sekarang non-blocking.
-        # Umpan balik (sukses/gagal) akan di-handle oleh update_status_label.
-        self.manager.save_map(map_name)
+        if self.manager.save_map(map_name):
+            # Beri umpan balik langsung bahwa perintah sudah dikirim
+            screen.ids.mapping_status_label.text = f"Perintah simpan peta '{map_name}' dikirim.\nCek terminal untuk statusnya."
+        else:
+            screen.ids.mapping_status_label.text = "GAGAL mengirim perintah simpan.\nCek nama peta dan terminal."
         
     def on_stop(self):
-        """Dipanggil saat aplikasi Kivy ditutup."""
         self.manager.shutdown()
 
     @mainthread
     def update_status_label(self, screen_name, label_id, new_text):
-        """Fungsi aman untuk update label dari thread manapun."""
         if self.root:
             screen = self.root.get_screen(screen_name)
             if screen and label_id in screen.ids:
