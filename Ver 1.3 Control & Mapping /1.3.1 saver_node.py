@@ -1,37 +1,124 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import rospy
-import subprocess
-from std_msgs.msg import String
-import os
+from kivy.app import App
+from kivy.lang import Builder
+from kivy.uix.screenmanager import Screen
+from kivy.clock import mainthread
 
-def save_map_callback(message):
-    map_name = message.data
-    rospy.loginfo(f"[SaverNode] Menerima perintah untuk menyimpan peta: {map_name}")
-    if not map_name:
-        rospy.logerr("[SaverNode] Nama peta kosong, perintah dibatalkan.")
-        return
+from manager import RosManager
 
-    command_to_run = f"""
-    gnome-terminal -- /bin/bash -c "source /opt/ros/noetic/setup.bash; \\
-    source ~/catkin_ws/devel/setup.bash; \\
-    echo '[INFO] Sedang menyimpan peta dengan nama: {map_name}'; \\
-    rosrun map_server map_saver -f ~/catkin_ws/src/autonomus_mobile_robot/maps/{map_name}; \\
-    echo '[INFO] Perintah Selesai. Terminal akan ditutup dalam 5 detik...'; \\
-    sleep 5; exit"
-    """
-    try:
-        subprocess.Popen(command_to_run, shell=True)
-        rospy.loginfo("[SaverNode] Berhasil membuka terminal baru untuk map_saver.")
-    except Exception as e:
-        rospy.logerr(f"[SaverNode] Gagal membuka terminal baru: {e}")
+class MainApp(App):
+    def build(self):
+        self.manager = RosManager(status_callback=self.update_status_label)
+        
+        kv_design = """
+ScreenManager:
+    id: sm
+    
+    Screen:
+        name: 'main_menu'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Waiter Bot Control Center'
+                font_size: '30sp'
+            Button:
+                text: 'Mode Controller'
+                font_size: '22sp'
+                on_press: app.go_to_controller_mode()
+            Button:
+                text: 'Mode Mapping'
+                font_size: '22sp'
+                on_press: app.go_to_mapping_mode()
 
-def main():
-    rospy.init_node('saver_node', anonymous=True)
-    rospy.Subscriber('/save_map_command', String, save_map_callback)
-    rospy.loginfo("SaverNode (Pekerja Penyimpan Peta) siap menerima perintah.")
-    rospy.spin()
+    Screen:
+        name: 'controller'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: controller_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+            Button:
+                text: 'Stop & Kembali ke Menu'
+                font_size: '22sp'
+                on_press: app.exit_controller_mode()
+            
+    Screen:
+        name: 'mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: mapping_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+                size_hint_y: 0.3
+            TextInput:
+                id: map_name_input
+                hint_text: 'Ketik nama peta di sini...'
+                font_size: '20sp'
+                size_hint_y: 0.2
+            Button:
+                text: 'Simpan Peta'
+                font_size: '22sp'
+                on_press: app.save_map()
+            Button:
+                text: 'Selesai Mapping & Kembali'
+                font_size: '22sp'
+                on_press: app.exit_mapping_mode()
+"""
+        return Builder.load_string(kv_design)
+
+    def go_to_controller_mode(self):
+        status = self.manager.start_controller()
+        self.update_status_label('controller', 'controller_status_label', status)
+        self.root.current = 'controller'
+
+    def exit_controller_mode(self):
+        self.manager.stop_controller()
+        self.root.current = 'main_menu'
+
+    def go_to_mapping_mode(self):
+        status = self.manager.start_mapping()
+        self.update_status_label('mapping', 'mapping_status_label', status)
+        self.root.current = 'mapping'
+
+    def exit_mapping_mode(self):
+        # Selalu simpan peta saat keluar, antisipasi jika pengguna lupa menekan save
+        screen = self.root.get_screen('mapping')
+        map_name = screen.ids.map_name_input.text
+        if map_name:
+             self.manager.save_map(f"{map_name}_final") # Simpan dengan nama berbeda
+             time.sleep(2) # Beri sedikit waktu untuk proses simpan
+
+        self.manager.stop_mapping()
+        self.root.current = 'main_menu'
+        
+    def save_map(self):
+        """Fungsi ini sekarang hanya mengambil nama map dan memanggil manager."""
+        screen = self.root.get_screen('mapping')
+        map_name = screen.ids.map_name_input.text
+        
+        # Panggil fungsi save_map di manager, yang sekarang non-blocking.
+        # Umpan balik (sukses/gagal) akan di-handle oleh update_status_label.
+        self.manager.save_map(map_name)
+        
+    def on_stop(self):
+        self.manager.shutdown()
+
+    @mainthread
+    def update_status_label(self, screen_name, label_id, new_text):
+        if self.root:
+            screen = self.root.get_screen(screen_name)
+            if screen and label_id in screen.ids:
+                screen.ids[label_id].text = new_text
 
 if __name__ == '__main__':
-    main()
+    MainApp().run()
