@@ -31,35 +31,31 @@ class RosManager:
             print("INFO: Memulai roscore di latar belakang...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(3) 
+                time.sleep(4) 
                 print("INFO: roscore seharusnya sudah berjalan.")
             except Exception as e:
                 print(f"FATAL: Gagal memulai roscore: {e}")
-                # Program Anda sebelumnya memanggil 'main', tetapi screen Anda bernama 'main_menu'
                 self.status_callback("main_menu", "status_label", "FATAL! Gagal memulai roscore.")
 
     def _monitor_processes(self):
         while True:
-            if self.is_controller_running and self.controller_process:
-                if self.controller_process.poll() is not None:
-                    print("ERROR: Proses controller.launch berhenti tak terduga!")
-                    self.is_controller_running = False
-                    self.controller_process = None
-                    # ID label di screen 'controller' adalah 'controller_status_label'
-                    self.status_callback("controller", "controller_status_label", "Status: Gagal! Proses berhenti.")
+            if self.is_controller_running and self.controller_process and self.controller_process.poll() is not None:
+                print("ERROR: Proses controller.launch berhenti tak terduga!")
+                self.is_controller_running = False
+                self.controller_process = None
+                self.status_callback("controller", "controller_status_label", "Status: Gagal! Proses berhenti.")
             
-            if self.is_mapping_running and self.mapping_process:
-                if self.mapping_process.poll() is not None:
-                    print("ERROR: Proses mapping.launch berhenti tak terduga!")
-                    self.is_mapping_running = False
-                    self.mapping_process = None
-                    # ID label di screen 'mapping' adalah 'mapping_status_label'
-                    self.status_callback("mapping", "mapping_status_label", "Status: Gagal! Mapping berhenti.")
+            if self.is_mapping_running and self.mapping_process and self.mapping_process.poll() is not None:
+                print("ERROR: Proses mapping.launch berhenti tak terduga!")
+                self.is_mapping_running = False
+                self.mapping_process = None
+                self.is_controller_running = False
+                self.controller_process = None
+                self.status_callback("mapping", "mapping_status_label", "Status: Gagal! Mapping berhenti.")
             
             time.sleep(1)
 
     def _stop_process_group(self, process, name):
-        """Fungsi terpusat untuk menghentikan grup proses."""
         if process and process.poll() is None:
             try:
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
@@ -79,7 +75,7 @@ class RosManager:
         return "Status: Sudah Aktif"
 
     def stop_controller(self):
-        if self.is_controller_running and self.controller_process:
+        if self.is_controller_running:
             self.controller_process = self._stop_process_group(self.controller_process, "Controller")
             self.is_controller_running = False
         return "Status: DIMATIKAN"
@@ -101,7 +97,7 @@ class RosManager:
             self.stop_controller()
         return "Status: DIMATIKAN"
 
-    # --- INI ADALAH FUNGSI KUNCI YANG DIPERBAIKI ---
+    # --- FUNGSI KUNCI YANG DIPERBAIKI SESUAI IDE ANDA ---
     def save_map(self, map_name):
         if not map_name.strip():
             print("ERROR: Nama peta tidak boleh kosong.")
@@ -112,14 +108,18 @@ class RosManager:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
             map_save_path = os.path.join(pkg_path, 'maps', map_name)
             
-            # Perintah lengkap untuk membuka terminal baru dan menjalankan map_saver
-            command = f'gnome-terminal -- bash -c "rosrun map_server map_saver -f {map_save_path}; echo; echo \\"Peta disimpan. Terminal ini akan tertutup dalam 5 detik.\\"; sleep 5"'
+            # Perintah lengkap untuk membuka terminal baru dan menjalankan map_saver di dalamnya.
+            # `bash -c "..."` : Menjalankan serangkaian perintah.
+            # `sleep 5`       : Memberi waktu 5 detik agar pengguna bisa melihat hasilnya sebelum terminal tertutup.
+            # `exit`          : Menutup terminal secara otomatis.
+            command_to_run_in_terminal = f"rosrun map_server map_saver -f {map_save_path}; echo; echo \\\"Peta disimpan. Terminal akan tertutup dalam 5 detik...\\\"; sleep 5; exit"
             
-            print(f"INFO: Menjalankan di terminal baru: {command}")
+            full_terminal_command = f'gnome-terminal -- bash -c "{command_to_run_in_terminal}"'
             
-            # Popen menjalankan perintah untuk membuka terminal baru.
-            # Ini adalah operasi non-blocking, jadi GUI tidak akan crash.
-            subprocess.Popen(command, shell=True)
+            print(f"INFO: Membuka terminal baru dengan perintah: {full_terminal_command}")
+            
+            # Popen hanya bertugas membuka terminal baru, ini sangat cepat dan tidak akan crash.
+            subprocess.Popen(full_terminal_command, shell=True)
             
             return True
         except rospkg.ResourceNotFound:
