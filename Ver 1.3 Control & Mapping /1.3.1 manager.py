@@ -1,4 +1,4 @@
-# File: manager.py (Versi Perbaikan untuk Masalah Jendela Tidak Terbuka)
+# File: manager.py (Versi Perbaikan agar GUI tidak terblokir)
 
 import subprocess
 import threading
@@ -21,12 +21,10 @@ class RosManager:
         self.status_callback = status_callback
         self.save_map_publisher = rospy.Publisher('/save_map_command', String, queue_size=10)
         
-        # ===== PERUBAHAN UTAMA DI SINI =====
-        # Jangan panggil start_roscore() langsung. Jalankan di thread terpisah.
+        # PERBAIKAN: Jalankan roscore di thread terpisah agar tidak memblokir
         roscore_thread = threading.Thread(target=self.start_roscore)
-        roscore_thread.daemon = True # Pastikan thread ini mati saat aplikasi utama ditutup
+        roscore_thread.daemon = True
         roscore_thread.start()
-        # ==================================
         
         self.monitor_thread = threading.Thread(target=self._monitor_processes)
         self.monitor_thread.daemon = True
@@ -34,21 +32,18 @@ class RosManager:
         print("INFO: RosManager siap.")
 
     def start_roscore(self):
-        """Fungsi ini sekarang berjalan di thread-nya sendiri, tidak akan memblokir GUI."""
+        """Fungsi ini sekarang berjalan di thread terpisah."""
         if self.roscore_process is None:
             print("INFO: [THREAD] Memulai roscore...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(3) # Jeda ini sekarang aman karena ada di thread terpisah
+                time.sleep(3) # Jeda ini aman karena tidak di main thread
                 print("INFO: [THREAD] roscore seharusnya sudah berjalan.")
             except Exception as e:
                 print(f"FATAL: [THREAD] Gagal memulai roscore: {e}")
-                if self.status_callback:
-                    self.status_callback("main_menu", "status_label", "FATAL! Gagal memulai roscore.")
-        else:
-            print("INFO: [THREAD] roscore sudah berjalan.")
+                if self.status_callback: self.status_callback("main_menu", "status_label", "FATAL! Gagal memulai roscore.")
 
-    # ... (Semua fungsi lain dari _monitor_processes hingga shutdown tetap SAMA PERSIS seperti sebelumnya) ...
+    # ... (Sisa file ini sama persis seperti versi sebelumnya yang berfungsi baik) ...
     def _monitor_processes(self):
         while True:
             if self.is_controller_running and self.controller_process and self.controller_process.poll() is not None:
