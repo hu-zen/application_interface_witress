@@ -12,7 +12,6 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # Menggunakan layout asli Anda
         kv_design = """
 ScreenManager:
     id: sm
@@ -24,7 +23,6 @@ ScreenManager:
             padding: 40
             spacing: 20
             Label:
-                id: status_label # ID ditambahkan untuk pesan error roscore
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
             Button:
@@ -34,7 +32,33 @@ ScreenManager:
             Button:
                 text: 'Mode Mapping'
                 font_size: '22sp'
+                on_press: sm.current = 'pre_mapping' # Pindah ke layar input nama peta
+
+    # --- SCREEN BARU UNTUK INPUT NAMA PETA ---
+    Screen:
+        name: 'pre_mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Masukkan Nama Peta'
+                font_size: '26sp'
+            TextInput:
+                id: map_name_input
+                hint_text: 'Contoh: peta_lantai_1'
+                font_size: '20sp'
+                multiline: False
+                size_hint_y: None
+                height: '48dp'
+            Button:
+                text: 'Mulai Mapping'
+                font_size: '22sp'
                 on_press: app.go_to_mapping_mode()
+            Button:
+                text: 'Kembali ke Menu'
+                font_size: '22sp'
+                on_press: sm.current = 'main_menu'
 
     Screen:
         name: 'controller'
@@ -61,19 +85,13 @@ ScreenManager:
                 id: mapping_status_label
                 text: 'Status: Siap'
                 font_size: '20sp'
-                size_hint_y: 0.3
-            TextInput:
-                id: map_name_input
-                hint_text: 'Ketik nama peta di sini...'
-                font_size: '20sp'
-                size_hint_y: 0.2
-                multiline: False
+            Label:
+                id: current_map_name_label
+                text: 'Memetakan: '
+                font_size: '18sp'
+                color: 0.7, 0.7, 0.7, 1
             Button:
-                text: 'Simpan Peta'
-                font_size: '22sp'
-                on_press: app.save_map()
-            Button:
-                text: 'Selesai Mapping & Kembali'
+                text: 'Selesai Mapping & Simpan Otomatis'
                 font_size: '22sp'
                 on_press: app.exit_mapping_mode()
 """
@@ -89,23 +107,34 @@ ScreenManager:
         self.root.current = 'main_menu'
 
     def go_to_mapping_mode(self):
-        status = self.manager.start_mapping()
-        self.update_status_label('mapping', 'mapping_status_label', status)
+        # Ambil nama peta dari layar 'pre_mapping'
+        pre_mapping_screen = self.root.get_screen('pre_mapping')
+        map_name = pre_mapping_screen.ids.map_name_input.text
+
+        if not map_name.strip():
+            pre_mapping_screen.ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
+            return
+
+        # Kirim nama peta ke manager dan mulai mapping
+        status = self.manager.start_mapping(map_name)
+        
+        # Update label di layar mapping
+        mapping_screen = self.root.get_screen('mapping')
+        mapping_screen.ids.mapping_status_label.text = status
+        mapping_screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
+        
         self.root.current = 'mapping'
 
     def exit_mapping_mode(self):
+        # Manager akan menangani penyimpanan otomatis
+        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta dan menghentikan proses...')
+        # Memberi sedikit jeda agar pengguna bisa melihat pesan status
+        from kivy.clock import Clock
+        Clock.schedule_once(self._finish_exit_mapping, 2)
+
+    def _finish_exit_mapping(self, dt):
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
-        
-    def save_map(self):
-        screen = self.root.get_screen('mapping')
-        map_name = screen.ids.map_name_input.text
-        
-        if self.manager.save_map(map_name):
-            # Umpan balik yang jelas sesuai ide Anda
-            screen.ids.mapping_status_label.text = f"Terminal baru dibuka untuk menyimpan peta '{map_name}'..."
-        else:
-            screen.ids.mapping_status_label.text = "GAGAL membuka terminal baru.\nPastikan nama peta diisi."
         
     def on_stop(self):
         self.manager.shutdown()
