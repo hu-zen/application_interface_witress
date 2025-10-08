@@ -24,6 +24,8 @@ ScreenManager:
             padding: 40
             spacing: 20
             Label:
+                # Label ini ditambahkan untuk menampilkan status roscore jika ada masalah
+                id: status_label 
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
             Button:
@@ -68,7 +70,7 @@ ScreenManager:
                 size_hint_y: 0.2
                 multiline: False
             Button:
-                text: 'Simpan Peta (Buka Terminal Baru)'
+                text: 'Simpan Peta'
                 font_size: '22sp'
                 on_press: app.save_map()
             Button:
@@ -101,9 +103,10 @@ ScreenManager:
         map_name = screen.ids.map_name_input.text
         
         if self.manager.save_map(map_name):
+            # Beri umpan balik bahwa terminal baru akan muncul
             screen.ids.mapping_status_label.text = f"Membuka terminal baru untuk menyimpan peta '{map_name}'..."
         else:
-            screen.ids.mapping_status_label.text = "GAGAL membuka terminal baru.\nCek nama peta dan terminal utama."
+            screen.ids.mapping_status_label.text = "GAGAL menyimpan peta.\nPastikan nama peta diisi & ROS berjalan."
         
     def on_stop(self):
         self.manager.shutdown()
