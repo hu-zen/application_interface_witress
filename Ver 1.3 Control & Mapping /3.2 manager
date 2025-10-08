@@ -1,4 +1,4 @@
-# File: manager.py (Solusi Final dengan Skrip Jembatan)
+# File: manager.py (Solusi Final dengan Simpan Otomatis di Akhir)
 
 import subprocess
 import time
@@ -8,66 +8,107 @@ import rospkg
 
 class RosManager:
     def __init__(self, status_callback):
-        self.ros_launcher_script_path = None
-        self.rospack = rospkg.RosPack()
-        try:
-            # Cari path skrip jembatan kita saat inisialisasi
-            pkg_path = self.rospack.get_path('waiterbot_interface')
-            self.ros_launcher_script_path = os.path.join(pkg_path, 'scripts', 'ros_launcher.py')
-        except rospkg.ResourceNotFound:
-            print("FATAL: Paket 'waiterbot_interface' tidak ditemukan!")
-            # Tampilkan error di GUI jika bisa
-            status_callback("main_menu", "status_label", "FATAL: Paket 'waiterbot_interface' tidak ditemukan!")
+        self.roscore_process = None
+        self.controller_process = None
+        self.mapping_process = None
+        
+        self.is_controller_running = False
+        self.is_mapping_running = False
         
         self.status_callback = status_callback
+        self.rospack = rospkg.RosPack()
+        
+        self.current_map_name = None
+        
+        self.start_roscore()
         print("INFO: RosManager siap.")
 
-    # TIDAK PERLU LAGI MENGELOLA PROSES ROSSECRA MANUAL
-    # Fungsi start_roscore, _monitor_processes, _stop_process_group, start/stop_controller, start/stop_mapping
-    # bisa dihapus atau dikomentari karena sekarang semua dikelola oleh roslaunch di terminal terpisah.
-    
-    # KITA BUAT FUNGSI BARU YANG LEBIH SEDERHANA
-    
+    def start_roscore(self):
+        try:
+            subprocess.check_output(["pidof", "roscore"])
+            print("INFO: roscore sudah berjalan.")
+        except subprocess.CalledProcessError:
+            print("INFO: Memulai roscore di latar belakang...")
+            try:
+                self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                time.sleep(4)
+                print("INFO: roscore seharusnya sudah aktif.")
+            except Exception as e:
+                print(f"FATAL: Gagal memulai roscore: {e}")
+
+    def _stop_process_group(self, process, name):
+        if process and process.poll() is None:
+            try:
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                process.wait(timeout=5)
+                print(f"INFO: Grup proses '{name}' berhasil dihentikan.")
+            except (ProcessLookupError, subprocess.TimeoutExpired, OSError):
+                print(f"WARN: Gagal menghentikan '{name}' dengan normal.")
+        return None
+
+    def start_controller(self):
+        if not self.is_controller_running:
+            command = "roslaunch my_robot_pkg controller.launch"
+            self.controller_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.is_controller_running = True
+            print("INFO: Mode Controller dimulai.")
+            return "Status: AKTIF"
+        return "Status: Sudah Aktif"
+
+    def stop_controller(self):
+        if self.is_controller_running:
+            self.controller_process = self._stop_process_group(self.controller_process, "Controller")
+            self.is_controller_running = False
+        return "Status: DIMATIKAN"
+
     def start_mapping(self, map_name):
-        if not self.ros_launcher_script_path: return "GAGAL: Skrip jembatan tidak ditemukan."
-        
-        # Perintah untuk memanggil skrip jembatan agar menjalankan mapping.launch
-        command = [self.ros_launcher_script_path, 'launch', 'autonomus_mobile_robot', 'mapping.launch']
-        try:
-            subprocess.Popen(command)
-            # Simpan nama peta untuk nanti
+        if not self.is_mapping_running:
             self.current_map_name = map_name
-            return "Terminal mapping dibuka..."
-        except Exception as e:
-            print(f"Error saat memulai mapping: {e}")
-            return "Gagal memulai mapping."
+            command = "roslaunch autonomus_mobile_robot mapping.launch"
+            try:
+                self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
+                self.is_mapping_running = True
+                print(f"INFO: Mode Mapping dimulai untuk peta '{self.current_map_name}'.")
+                self.start_controller()
+                return "Mode Pemetaan AKTIF.\nSilakan gerakkan robot."
+            except Exception as e:
+                print(f"FATAL: Gagal menjalankan roslaunch: {e}")
+                return f"GAGAL memulai mapping!\nError: {e}"
+        return "Status: Mapping Sudah Aktif"
 
-    def save_and_stop_mapping(self):
-        if not self.ros_launcher_script_path: return "GAGAL: Skrip jembatan tidak ditemukan."
-        if not self.current_map_name: return "GAGAL: Nama peta tidak ada."
+    def stop_mapping(self):
+        if self.is_mapping_running:
+            self._save_map_on_exit()
+            print("INFO: Menghentikan proses mapping...")
+            self.mapping_process = self._stop_process_group(self.mapping_process, "Mapping")
+            self.is_mapping_running = False
+            self.stop_controller()
+            self.current_map_name = None
+        return "Status: DIMATIKAN"
 
+    def _save_map_on_exit(self):
+        if not self.current_map_name:
+            print("WARN: Tidak ada nama peta, penyimpanan dilewati.")
+            return
+        
         try:
-            # Dapatkan path tujuan penyimpanan
-            robot_pkg_path = self.rospack.get_path('autonomus_mobile_robot')
-            map_save_path = os.path.join(robot_pkg_path, 'maps', self.current_map_name)
-
-            # Perintah untuk memanggil skrip jembatan agar menyimpan peta
-            command = [self.ros_launcher_script_path, 'save', map_save_path]
-            subprocess.Popen(command)
+            pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+            map_save_path = os.path.join(pkg_path, 'maps', self.current_map_name)
+            command = f"rosrun map_server map_saver -f {map_save_path}"
+            print(f"INFO: Menyimpan peta secara otomatis ke '{map_save_path}'...")
             
-            # Matikan SEMUA node ros dengan `rosnode kill -a`
-            # Ini cara yang paling ampuh untuk mematikan semuanya, termasuk RViz.
-            # Kita jalankan juga via skrip jembatan agar environment-nya benar.
-            kill_command = 'gnome-terminal -- bash -c "source ~/catkin_ws/devel/setup.bash; rosnode kill -a; echo \'Semua node ROS telah dihentikan.\'; sleep 3; exit"'
-            subprocess.Popen(kill_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            return "Menyimpan peta & mematikan semua node..."
+            # Menjalankan map_saver. Ini akan sedikit memblokir, tapi aman karena
+            # GUI sudah dalam proses keluar dari layar ini.
+            result = subprocess.run(command, shell=True, check=True, timeout=15, capture_output=True, text=True)
+            
+            print("INFO: Peta berhasil disimpan!")
+            print(result.stdout)
         except Exception as e:
-            print(f"Error saat menyimpan/menghentikan: {e}")
-            return "Gagal menyimpan/menghentikan."
+            print(f"ERROR: Gagal menyimpan peta saat keluar: {e}")
 
     def shutdown(self):
-        print("INFO: Aplikasi ditutup. Menghentikan semua node ROS...")
-        # Jalankan perintah kill all nodes saat aplikasi ditutup untuk memastikan tidak ada yang tersisa
-        kill_command = 'gnome-terminal -- bash -c "source ~/catkin_ws/devel/setup.bash; rosnode kill -a; echo \'Semua node ROS telah dihentikan.\'; sleep 3; exit"'
-        subprocess.Popen(kill_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
+        self.stop_mapping()
+        self.stop_controller()
+        if self.roscore_process:
+            self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
