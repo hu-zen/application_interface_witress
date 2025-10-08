@@ -21,49 +21,52 @@ class RosManager:
         
         self.start_roscore()
         
-        # Monitor thread tetap berguna untuk mendeteksi jika launch file crash
         self.monitor_thread = threading.Thread(target=self._monitor_processes)
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
         print("INFO: RosManager siap.")
 
     def start_roscore(self):
-        if self.roscore_process is None or self.roscore_process.poll() is not None:
+        if self.roscore_process is None:
             print("INFO: Memulai roscore di latar belakang...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(4)
+                time.sleep(3) 
                 print("INFO: roscore seharusnya sudah berjalan.")
             except Exception as e:
                 print(f"FATAL: Gagal memulai roscore: {e}")
+                # Program Anda sebelumnya memanggil 'main', tetapi screen Anda bernama 'main_menu'
+                self.status_callback("main_menu", "status_label", "FATAL! Gagal memulai roscore.")
 
     def _monitor_processes(self):
-        # Kode monitor asli Anda sudah baik, kita pertahankan
         while True:
-            if self.is_controller_running and self.controller_process and self.controller_process.poll() is not None:
-                print("ERROR: Proses controller.launch berhenti tak terduga!")
-                self.is_controller_running = False
-                self.controller_process = None
-                self.status_callback("controller", "controller_status_label", "Status: Gagal! Proses berhenti.")
+            if self.is_controller_running and self.controller_process:
+                if self.controller_process.poll() is not None:
+                    print("ERROR: Proses controller.launch berhenti tak terduga!")
+                    self.is_controller_running = False
+                    self.controller_process = None
+                    # ID label di screen 'controller' adalah 'controller_status_label'
+                    self.status_callback("controller", "controller_status_label", "Status: Gagal! Proses berhenti.")
             
-            if self.is_mapping_running and self.mapping_process and self.mapping_process.poll() is not None:
-                print("ERROR: Proses mapping.launch berhenti tak terduga!")
-                self.is_mapping_running = False
-                self.mapping_process = None
-                self.is_controller_running = False # Matikan juga flag controller
-                self.controller_process = None
-                self.status_callback("mapping", "mapping_status_label", "Status: Gagal! Mapping berhenti.")
+            if self.is_mapping_running and self.mapping_process:
+                if self.mapping_process.poll() is not None:
+                    print("ERROR: Proses mapping.launch berhenti tak terduga!")
+                    self.is_mapping_running = False
+                    self.mapping_process = None
+                    # ID label di screen 'mapping' adalah 'mapping_status_label'
+                    self.status_callback("mapping", "mapping_status_label", "Status: Gagal! Mapping berhenti.")
             
             time.sleep(1)
 
-    def stop_process_group(self, process, name):
+    def _stop_process_group(self, process, name):
+        """Fungsi terpusat untuk menghentikan grup proses."""
         if process and process.poll() is None:
             try:
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait(timeout=5)
                 print(f"INFO: Grup proses '{name}' berhasil dihentikan.")
             except (ProcessLookupError, subprocess.TimeoutExpired, OSError):
-                print(f"WARN: Gagal menghentikan '{name}'. Mungkin sudah berhenti.")
+                print(f"WARN: Gagal menghentikan '{name}', mungkin sudah berhenti.")
         return None
 
     def start_controller(self):
@@ -76,8 +79,8 @@ class RosManager:
         return "Status: Sudah Aktif"
 
     def stop_controller(self):
-        if self.is_controller_running:
-            self.controller_process = self.stop_process_group(self.controller_process, "Controller")
+        if self.is_controller_running and self.controller_process:
+            self.controller_process = self._stop_process_group(self.controller_process, "Controller")
             self.is_controller_running = False
         return "Status: DIMATIKAN"
 
@@ -93,41 +96,37 @@ class RosManager:
 
     def stop_mapping(self):
         if self.is_mapping_running:
-            self.mapping_process = self.stop_process_group(self.mapping_process, "Mapping")
+            self.mapping_process = self._stop_process_group(self.mapping_process, "Mapping")
             self.is_mapping_running = False
             self.stop_controller()
         return "Status: DIMATIKAN"
 
-    # --- INI ADALAH FUNGSI KUNCI YANG DIPERBAIKI SESUAI IDE ANDA ---
+    # --- INI ADALAH FUNGSI KUNCI YANG DIPERBAIKI ---
     def save_map(self, map_name):
         if not map_name.strip():
             print("ERROR: Nama peta tidak boleh kosong.")
             return False
 
         try:
-            # Dapatkan path paket tempat GUI berjalan untuk menemukan skrip helper
-            interface_pkg_path = self.rospack.get_path('waiterbot_interface')
-            script_path = os.path.join(interface_pkg_path, 'scripts', 'save_map_terminal.py')
-
-            # Dapatkan path paket tempat peta akan disimpan
-            robot_pkg_path = self.rospack.get_path('autonomus_mobile_robot')
-            map_save_path = os.path.join(robot_pkg_path, 'maps', map_name)
-
-            # Perintah untuk menjalankan skrip helper dengan argumen path peta
-            command = [script_path, map_save_path]
+            # Dapatkan path dari paket tempat peta akan disimpan
+            pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+            map_save_path = os.path.join(pkg_path, 'maps', map_name)
             
-            print(f"INFO: Memanggil skrip helper untuk membuka terminal baru...")
+            # Perintah lengkap untuk membuka terminal baru dan menjalankan map_saver
+            command = f'gnome-terminal -- bash -c "rosrun map_server map_saver -f {map_save_path}; echo; echo \\"Peta disimpan. Terminal ini akan tertutup dalam 5 detik.\\"; sleep 5"'
             
-            # Popen tidak memblokir, ia hanya menjalankan skrip yang akan membuka terminal baru
-            subprocess.Popen(command)
+            print(f"INFO: Menjalankan di terminal baru: {command}")
             
-            print("INFO: Permintaan untuk membuka terminal simpan telah dikirim.")
+            # Popen menjalankan perintah untuk membuka terminal baru.
+            # Ini adalah operasi non-blocking, jadi GUI tidak akan crash.
+            subprocess.Popen(command, shell=True)
+            
             return True
-        except rospkg.ResourceNotFound as e:
-            print(f"ERROR: Paket tidak ditemukan: {e}")
+        except rospkg.ResourceNotFound:
+            print("ERROR: Paket 'autonomus_mobile_robot' tidak ditemukan.")
             return False
         except Exception as e:
-            print(f"ERROR: Gagal memanggil skrip simpan peta: {e}")
+            print(f"ERROR: Gagal membuka terminal untuk menyimpan peta: {e}")
             return False
 
     def shutdown(self):
@@ -136,5 +135,4 @@ class RosManager:
         self.stop_controller()
         
         if self.roscore_process:
-            print("INFO: Menghentikan roscore...")
-            self.roscore_process = self.stop_process_group(self.roscore_process, "roscore")
+            self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
