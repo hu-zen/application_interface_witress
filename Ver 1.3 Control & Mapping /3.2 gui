@@ -4,13 +4,16 @@
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
-from kivy.clock import mainthread
+from kivy.clock import mainthread, Clock
+
+# Pastikan Anda mengimpor manager dari file yang benar
 from manager import RosManager
 
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
+        # Desain KV diubah untuk mengirim teks input secara langsung
         kv_design = """
 ScreenManager:
     id: sm
@@ -22,11 +25,14 @@ ScreenManager:
             padding: 40
             spacing: 20
             Label:
-                id: status_label
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
             Button:
-                text: 'Mulai Sesi Mapping'
+                text: 'Mode Controller'
+                font_size: '22sp'
+                on_press: app.go_to_controller_mode()
+            Button:
+                text: 'Mode Mapping'
                 font_size: '22sp'
                 on_press: sm.current = 'pre_mapping'
 
@@ -40,64 +46,101 @@ ScreenManager:
                 text: 'Masukkan Nama Peta'
                 font_size: '26sp'
             TextInput:
-                id: map_name_input
-                hint_text: 'Contoh: peta_lab_1'
+                id: map_name_input # ID tetap ada untuk referensi
+                hint_text: 'Contoh: peta_lantai_1'
                 font_size: '20sp'
                 multiline: False
                 size_hint_y: None
                 height: '48dp'
             Button:
-                text: 'Buka Terminal Mapping'
+                text: 'Mulai Mapping'
                 font_size: '22sp'
-                on_press: app.start_mapping_session()
+                # --- INI PERUBAHAN UTAMA ---
+                # Kirim teks dari input langsung sebagai argumen
+                on_press: app.go_to_mapping_mode(map_name_input.text)
             Button:
-                text: 'Kembali'
+                text: 'Kembali ke Menu'
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
 
     Screen:
-        name: 'mapping_in_progress'
+        name: 'controller'
+        BoxLayout:
+            # ... (Tidak ada perubahan di sini)
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: controller_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+            Button:
+                text: 'Stop & Kembali ke Menu'
+                font_size: '22sp'
+                on_press: app.exit_controller_mode()
+            
+    Screen:
+        name: 'mapping'
         BoxLayout:
             orientation: 'vertical'
             padding: 40
             spacing: 20
             Label:
                 id: mapping_status_label
-                text: 'Sesi mapping sedang berlangsung di terminal lain...'
+                text: 'Status: Siap'
                 font_size: '20sp'
             Label:
                 id: current_map_name_label
-                font_size: '16sp'
+                text: 'Memetakan: '
+                font_size: '18sp'
+                color: 0.7, 0.7, 0.7, 1
             Button:
-                text: 'Selesai & Simpan Peta'
+                text: 'Selesai Mapping & Simpan Otomatis'
                 font_size: '22sp'
-                on_press: app.stop_mapping_session()
+                on_press: app.exit_mapping_mode()
 """
         return Builder.load_string(kv_design)
 
-    def start_mapping_session(self):
-        screen = self.root.get_screen('pre_mapping')
-        map_name = screen.ids.map_name_input.text
+    def go_to_controller_mode(self):
+        status = self.manager.start_controller()
+        self.update_status_label('controller', 'controller_status_label', status)
+        self.root.current = 'controller'
 
-        if not map_name.strip():
-            screen.ids.map_name_input.hint_text = 'NAMA PETA WAJIB DIISI!'
-            return
-
-        status = self.manager.start_mapping(map_name)
-        
-        # Pindah ke layar "sedang mapping"
-        in_progress_screen = self.root.get_screen('mapping_in_progress')
-        in_progress_screen.ids.mapping_status_label.text = status
-        in_progress_screen.ids.current_map_name_label.text = f"Peta akan disimpan sebagai: {map_name}"
-        self.root.current = 'mapping_in_progress'
-
-    def stop_mapping_session(self):
-        status = self.manager.save_and_stop_mapping()
-        self.update_status_label('mapping_in_progress', 'mapping_status_label', status)
-        
-        # Kembali ke menu utama
+    def exit_controller_mode(self):
+        self.manager.stop_controller()
         self.root.current = 'main_menu'
 
+    # --- FUNGSI INI SEKARANG MENERIMA ARGUMEN ---
+    def go_to_mapping_mode(self, map_name):
+        # Validasi nama peta
+        if not map_name.strip():
+            pre_mapping_screen = self.root.get_screen('pre_mapping')
+            pre_mapping_screen.ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
+            return
+
+        # Kirim nama peta ke manager dan mulai proses mapping
+        status = self.manager.start_mapping(map_name)
+        
+        # Update label di layar "sedang mapping"
+        mapping_screen = self.root.get_screen('mapping')
+        mapping_screen.ids.mapping_status_label.text = status
+        mapping_screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
+        
+        self.root.current = 'mapping'
+
+    def exit_mapping_mode(self):
+        # Tampilkan pesan bahwa proses penyimpanan sedang berjalan
+        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta dan menghentikan proses...\nMohon tunggu.')
+        
+        # Beri jeda 1 detik agar pesan terlihat dan proses di latar belakang bisa mulai
+        Clock.schedule_once(self._finish_exit_mapping, 1)
+
+    def _finish_exit_mapping(self, dt):
+        # Panggil manager untuk menyimpan dan menghentikan semuanya
+        self.manager.stop_mapping()
+        # Kembali ke menu utama
+        self.root.current = 'main_menu'
+        
     def on_stop(self):
         self.manager.shutdown()
 
