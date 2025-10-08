@@ -1,4 +1,4 @@
-# File: manager.py (Versi Final dengan Save di Terminal Baru)
+# File: manager.py (Versi Final dengan Lingkungan ROS Lengkap)
 
 import subprocess
 import threading
@@ -12,15 +12,11 @@ class RosManager:
         self.roscore_process = None
         self.controller_process = None
         self.mapping_process = None
-        
         self.is_controller_running = False
         self.is_mapping_running = False
-        
         self.status_callback = status_callback
         self.rospack = rospkg.RosPack()
-        
         self.start_roscore()
-        
         self.monitor_thread = threading.Thread(target=self._monitor_processes)
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
@@ -40,31 +36,27 @@ class RosManager:
 
     def _monitor_processes(self):
         while True:
-            # Pantau proses controller
+            # (Fungsi monitor tetap sama, tidak perlu diubah)
             if self.is_controller_running and self.controller_process and self.controller_process.poll() is not None:
                 print("ERROR: Proses controller.launch berhenti tak terduga!")
                 self.is_controller_running = False
                 self.controller_process = None
                 if self.status_callback:
                     self.status_callback("controller", "controller_status_label", "Status: Gagal! Proses berhenti.")
-            
-            # Pantau proses mapping
             if self.is_mapping_running and self.mapping_process and self.mapping_process.poll() is not None:
                 print("ERROR: Proses mapping.launch berhenti tak terduga!")
                 self.is_mapping_running = False
                 self.mapping_process = None
                 if self.status_callback:
                     self.status_callback("mapping", "mapping_status_label", "Status: Gagal! Mapping berhenti.")
-            
             time.sleep(1)
 
-    # --- FUNGSI-FUNGSI MODE ---
+    # --- FUNGSI-FUNGSI MODE (TETAP SAMA) ---
     def start_controller(self):
         if not self.is_controller_running:
             command = "roslaunch my_robot_pkg controller.launch"
             self.controller_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
             self.is_controller_running = True
-            print("INFO: Mode Controller dimulai.")
             return "Status: AKTIF"
         return "Status: Sudah Aktif"
 
@@ -74,7 +66,6 @@ class RosManager:
             self.controller_process.wait()
             self.controller_process = None
             self.is_controller_running = False
-            print("INFO: Mode Controller dihentikan.")
             return "Status: DIMATIKAN"
         return "Status: Memang tidak aktif"
 
@@ -83,8 +74,6 @@ class RosManager:
             command = "roslaunch autonomus_mobile_robot mapping.launch"
             self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
             self.is_mapping_running = True
-            print("INFO: Mode Mapping dimulai.")
-            print("INFO: Menjalankan controller untuk mapping...")
             self.start_controller()
             return "Mode Pemetaan AKTIF.\nController juga aktif."
         return "Status: Mapping Sudah Aktif"
@@ -95,51 +84,42 @@ class RosManager:
             self.mapping_process.wait()
             self.mapping_process = None
             self.is_mapping_running = False
-            print("INFO: Mode Mapping dihentikan.")
-            print("INFO: Menghentikan controller...")
             self.stop_controller()
             return "Status: DIMATIKAN"
         return "Status: Memang tidak aktif"
         
-    # ===== PERUBAHAN UTAMA UNTUK MENYIMPAN PETA =====
     def save_map(self, map_name):
-        """Membuka terminal baru untuk menjalankan map_saver secara terpisah."""
         if not map_name:
-            print("ERROR: Nama peta tidak boleh kosong.")
             self.status_callback("mapping", "mapping_status_label", "GAGAL: Nama peta kosong.")
             return
 
         try:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
         except rospkg.ResourceNotFound:
-            print("ERROR: Paket 'autonomus_mobile_robot' tidak ditemukan.")
             self.status_callback("mapping", "mapping_status_label", "GAGAL: Paket Peta tidak ditemukan.")
             return
         
         map_save_path = f"{pkg_path}/maps/{map_name}"
         
-        # Perintah ini akan membuka terminal baru, menjalankan 'source', 
-        # menjalankan 'map_saver', lalu memberi jeda sebelum menutup.
+        # ===== PERUBAHAN UTAMA DI SINI =====
+        # Kita tambahkan 'source /opt/ros/noetic/setup.bash;' di awal
         command_to_run = f"""
-        gnome-terminal -- /bin/bash -c "source ~/catkin_ws/devel/setup.bash; \\
+        gnome-terminal -- /bin/bash -c "source /opt/ros/noetic/setup.bash; \\
+        source ~/catkin_ws/devel/setup.bash; \\
         echo 'Menyimpan peta ke {map_save_path}...'; \\
         rosrun map_server map_saver -f {map_save_path}; \\
         echo 'Perintah Selesai. Terminal akan ditutup dalam 5 detik...'; \\
         sleep 5; exit"
         """
+        # ==================================
         
         try:
-            # Kita jalankan perintah ini dan tidak perlu menunggunya (non-blocking)
             subprocess.Popen(command_to_run, shell=True)
-            print(f"INFO: Membuka terminal baru untuk menyimpan peta '{map_name}'.")
-            # Langsung beri feedback ke GUI bahwa proses dimulai
             self.status_callback("mapping", "mapping_status_label", f"Menyimpan '{map_name}'\ndi terminal baru...")
         except Exception as e:
             print(f"ERROR: Gagal membuka terminal baru: {e}")
             self.status_callback("mapping", "mapping_status_label", "GAGAL membuka terminal.")
     
-    # ============================================
-
     def shutdown(self):
         print("INFO: Shutdown dipanggil, menghentikan semua proses...")
         self.stop_mapping()
