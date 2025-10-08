@@ -1,48 +1,50 @@
-# File: manager.py (Versi Perbaikan)
+# File: manager.py (Versi Perbaikan Final)
 
 import subprocess
 import threading
 import time
+import os # Tambahkan ini untuk memeriksa environment
 
 class ControllerManager:
     def __init__(self, status_callback):
-        """
-        Sekarang kita butuh 'status_callback'. 
-        Ini adalah fungsi dari GUI yang akan kita panggil untuk update status.
-        """
         self.controller_process = None
         self.is_running = False
         self.status_callback = status_callback
         
-        # Buat dan jalankan thread untuk memantau proses
         self.monitor_thread = threading.Thread(target=self._monitor_process)
-        self.monitor_thread.daemon = True # Agar thread mati saat program utama ditutup
+        self.monitor_thread.daemon = True
         self.monitor_thread.start()
         print("INFO: ControllerManager siap dengan pemantauan proses.")
+
+        # Menambahkan pengecekan apakah ROS environment sudah di-source
+        if 'ROS_MASTER_URI' not in os.environ:
+            print("\n\nPERINGATAN PENTING:")
+            print("Lingkungan ROS belum di-source. Perintah 'roslaunch' kemungkinan besar akan gagal.")
+            print("Harap tutup aplikasi ini, jalankan 'source ~/catkin_ws/devel/setup.bash' di terminal, lalu jalankan kembali aplikasi ini.\n\n")
+
 
     def _monitor_process(self):
         """Fungsi ini berjalan selamanya di latar belakang."""
         while True:
             if self.is_running and self.controller_process:
-                # poll() akan mengembalikan None jika proses masih berjalan
                 if self.controller_process.poll() is not None:
                     print("ERROR: Proses controller.launch berhenti secara tak terduga!")
                     self.is_running = False
                     self.controller_process = None
-                    # Panggil fungsi callback untuk update label di GUI
                     self.status_callback("Status: Gagal! Proses berhenti.")
             
-            time.sleep(1) # Cek setiap 1 detik
+            time.sleep(1) 
 
     def start_controller(self):
         """Memulai proses controller.launch."""
         if not self.is_running:
             try:
-                # GANTI 'my_robot_pkg' dengan nama paket Anda yang benar
                 command = "roslaunch my_robot_pkg controller.launch"
                 
-                # Kita arahkan output-nya agar tidak mengganggu terminal utama
-                self.controller_process = subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                # ==== PERUBAHAN UTAMA DI SINI ====
+                # Kita hapus "stdout" dan "stderr" agar semua pesan dari 
+                # roslaunch (termasuk roscore) muncul di terminal ini.
+                self.controller_process = subprocess.Popen(command, shell=True)
                 
                 self.is_running = True
                 print("INFO: Perintah 'start_controller' dieksekusi.")
@@ -68,6 +70,5 @@ class ControllerManager:
             return "Status: Memang tidak aktif"
 
     def shutdown(self):
-        """Memastikan semua proses berhenti saat aplikasi ditutup."""
         print("INFO: Shutdown dipanggil...")
         self.stop_controller()
