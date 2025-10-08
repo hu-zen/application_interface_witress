@@ -3,22 +3,19 @@
 
 from kivy.app import App
 from kivy.lang import Builder
-from kivy.uix.screenmanager import Screen # <-- BARU: Impor Screen
-from kivy.clock import mainthread, Clock
+from kivy.uix.screenmanager import Screen
+from kivy.clock import mainthread
 
-# Impor kelas manager dari file manager.py
-from manager import RosManager # <-- Ganti nama import
+from manager import RosManager
 
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # Desain KV sekarang jauh lebih besar karena ada beberapa layar
         kv_design = """
 ScreenManager:
     id: sm
     
-    # LAYAR MENU UTAMA
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -37,7 +34,6 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.go_to_mapping_mode()
 
-    # LAYAR UNTUK MODE CONTROLLER
     Screen:
         name: 'controller'
         BoxLayout:
@@ -53,7 +49,6 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_controller_mode()
                 
-    # LAYAR BARU UNTUK MODE MAPPING
     Screen:
         name: 'mapping'
         BoxLayout:
@@ -71,18 +66,17 @@ ScreenManager:
                 font_size: '20sp'
                 size_hint_y: 0.2
             Button:
-                text: 'Simpan Peta & Selesai'
+                text: 'Simpan Peta'
                 font_size: '22sp'
                 on_press: app.save_map()
+            # ===== PERUBAHAN 1: Teks tombol diubah =====
             Button:
-                text: 'Batalkan & Kembali'
+                text: 'Selesai Mapping & Kembali'
                 font_size: '22sp'
                 on_press: app.exit_mapping_mode()
 """
         return Builder.load_string(kv_design)
 
-    # --- Fungsi untuk mengelola perpindahan layar dan mode ---
-    
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -107,24 +101,17 @@ ScreenManager:
         
         screen.ids.mapping_status_label.text = f"Menyimpan peta '{map_name}'..."
         
+        # ===== PERUBAHAN 2: Hanya menyimpan, tidak menghentikan/kembali =====
         if self.manager.save_map(map_name):
             screen.ids.mapping_status_label.text = f"Peta '{map_name}' BERHASIL disimpan!"
         else:
-            screen.ids.mapping_status_label.text = "GAGAL menyimpan peta.\nPastikan nama tidak kosong."
-
-        # Setelah menyimpan, hentikan mapping dan kembali ke menu utama setelah 2 detik
-        self.manager.stop_mapping()
-        Clock.schedule_once(self.go_to_main_menu, 2)
-        
-    def go_to_main_menu(self, dt):
-        self.root.current = 'main_menu'
+            screen.ids.mapping_status_label.text = "GAGAL menyimpan peta.\nCek nama file dan pastikan mapping berjalan."
         
     def on_stop(self):
         self.manager.shutdown()
 
     @mainthread
     def update_status_label(self, screen_name, label_id, new_text):
-        """Fungsi callback yang lebih canggih untuk update label di layar yang benar."""
         if self.root:
             screen = self.root.get_screen(screen_name)
             if screen and label_id in screen.ids:
