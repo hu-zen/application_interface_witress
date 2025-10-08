@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import subprocess
-import os
-import signal
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
@@ -13,10 +10,8 @@ from manager import RosManager
 
 class MainApp(App):
     def build(self):
-        self.manager = None
-        self.saver_process = None 
+        self.manager = RosManager(status_callback=self.update_status_label)
         
-        # ===== KODE DESAIN DENGAN SINTAKS YANG SUDAH DIPERBAIKI =====
         kv_design = """
 ScreenManager:
     id: sm
@@ -27,7 +22,6 @@ ScreenManager:
             padding: 40
             spacing: 20
             Label:
-                id: status_label
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
             Button:
@@ -38,6 +32,7 @@ ScreenManager:
                 text: 'Mode Mapping'
                 font_size: '22sp'
                 on_press: app.go_to_mapping_mode()
+
     Screen:
         name: 'controller'
         BoxLayout:
@@ -52,6 +47,7 @@ ScreenManager:
                 text: 'Stop & Kembali ke Menu'
                 font_size: '22sp'
                 on_press: app.exit_controller_mode()
+                
     Screen:
         name: 'mapping'
         BoxLayout:
@@ -79,19 +75,6 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    def on_start(self):
-        """Fungsi ini berjalan otomatis setelah build() selesai."""
-        print("INFO: [GUI] Menjalankan 'saver_node.py' di latar belakang...")
-        try:
-            saver_script_path = os.path.join(os.path.dirname(__file__), 'saver_node.py')
-            self.saver_process = subprocess.Popen(['python3', saver_script_path])
-            print(f"INFO: [GUI] 'saver_node.py' berjalan dengan PID: {self.saver_process.pid}")
-        except Exception as e:
-            print(f"FATAL: [GUI] Gagal menjalankan saver_node.py: {e}")
-
-        # Baru buat manager setelah saver jalan
-        self.manager = RosManager(status_callback=self.update_status_label)
-
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -113,26 +96,24 @@ ScreenManager:
     def save_map(self):
         screen = self.root.get_screen('mapping')
         map_name = screen.ids.map_name_input.text
-        self.manager.save_map(map_name)
         
+        # Langsung update GUI untuk memberi tahu pengguna
+        screen.ids.mapping_status_label.text = f"Mengirim perintah simpan\nuntuk peta '{map_name}'..."
+        
+        # ===== PERUBAHAN DI SINI =====
+        # Cukup panggil fungsi manager. Fungsi ini akan kembali dengan cepat,
+        # dan manager akan mengurus sisanya di latar belakang.
+        self.manager.save_map(map_name)
+            
     def on_stop(self):
-        print("INFO: [GUI] Aplikasi ditutup, menghentikan semua proses...")
-        if self.manager:
-            self.manager.shutdown()
-        if self.saver_process:
-            print(f"INFO: [GUI] Menghentikan 'saver_node.py' (PID: {self.saver_process.pid})")
-            self.saver_process.terminate()
-            self.saver_process.wait()
+        self.manager.shutdown()
 
     @mainthread
     def update_status_label(self, screen_name, label_id, new_text):
         if self.root:
-            try:
-                screen = self.root.get_screen(screen_name)
-                if screen and label_id in screen.ids:
-                    screen.ids[label_id].text = new_text
-            except Exception as e:
-                print(f"Gagal update GUI: {e}")
+            screen = self.root.get_screen(screen_name)
+            if screen and label_id in screen.ids:
+                screen.ids[label_id].text = new_text
 
 if __name__ == '__main__':
     MainApp().run()
