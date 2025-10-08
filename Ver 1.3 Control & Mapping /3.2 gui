@@ -5,7 +5,6 @@ from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
 from kivy.clock import mainthread
-import time
 
 from manager import RosManager
 
@@ -13,6 +12,7 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
+        # Menggunakan layout asli Anda yang sudah stabil
         kv_design = """
 ScreenManager:
     id: sm
@@ -68,7 +68,7 @@ ScreenManager:
                 size_hint_y: 0.2
                 multiline: False
             Button:
-                text: 'Simpan Peta'
+                text: 'Simpan Peta (Buka Terminal Baru)'
                 font_size: '22sp'
                 on_press: app.save_map()
             Button:
@@ -101,10 +101,9 @@ ScreenManager:
         map_name = screen.ids.map_name_input.text
         
         if self.manager.save_map(map_name):
-            # Beri umpan balik langsung bahwa perintah sudah dikirim
-            screen.ids.mapping_status_label.text = f"Perintah simpan peta '{map_name}' dikirim.\nCek terminal untuk statusnya."
+            screen.ids.mapping_status_label.text = f"Membuka terminal baru untuk menyimpan peta '{map_name}'..."
         else:
-            screen.ids.mapping_status_label.text = "GAGAL mengirim perintah simpan.\nCek nama peta dan terminal."
+            screen.ids.mapping_status_label.text = "GAGAL membuka terminal baru.\nCek nama peta dan terminal utama."
         
     def on_stop(self):
         self.manager.shutdown()
