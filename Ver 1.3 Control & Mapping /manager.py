@@ -1,20 +1,20 @@
-# File: manager.py (Versi dengan Mode Controller + Mapping)
+# File: manager.py (Lokasi Save Peta Diperbarui)
 
 import subprocess
 import threading
 import time
 import os
 import signal
-import rospkg # Kita butuh ini untuk menyimpan peta di lokasi yang benar
+import rospkg
 
 class RosManager:
     def __init__(self, status_callback):
         self.roscore_process = None
         self.controller_process = None
-        self.mapping_process = None # <-- BARU: Proses untuk mapping
+        self.mapping_process = None
         
         self.is_controller_running = False
-        self.is_mapping_running = False # <-- BARU: Status untuk mapping
+        self.is_mapping_running = False
         
         self.status_callback = status_callback
         self.rospack = rospkg.RosPack()
@@ -31,16 +31,14 @@ class RosManager:
             print("INFO: Memulai roscore di latar belakang...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(3) 
+                time.sleep(3)
                 print("INFO: roscore seharusnya sudah berjalan.")
             except Exception as e:
                 print(f"FATAL: Gagal memulai roscore: {e}")
                 self.status_callback("main", "status_label", "FATAL! Gagal memulai roscore.")
 
     def _monitor_processes(self):
-        """Sekarang memantau semua proses mode."""
         while True:
-            # Pantau proses controller
             if self.is_controller_running and self.controller_process:
                 if self.controller_process.poll() is not None:
                     print("ERROR: Proses controller.launch berhenti tak terduga!")
@@ -48,7 +46,6 @@ class RosManager:
                     self.controller_process = None
                     self.status_callback("controller", "status_label", "Status: Gagal! Proses berhenti.")
             
-            # BARU: Pantau proses mapping
             if self.is_mapping_running and self.mapping_process:
                 if self.mapping_process.poll() is not None:
                     print("ERROR: Proses mapping.launch berhenti tak terduga!")
@@ -78,10 +75,9 @@ class RosManager:
             return "Status: DIMATIKAN"
         return "Status: Memang tidak aktif"
 
-    # --- FUNGSI BARU UNTUK MODE MAPPING ---
+    # --- FUNGSI UNTUK MODE MAPPING ---
     def start_mapping(self):
         if not self.is_mapping_running:
-            # Pastikan nama launch file ini benar
             command = "roslaunch autonomus_mobile_robot mapping.launch"
             self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
             self.is_mapping_running = True
@@ -99,9 +95,11 @@ class RosManager:
             return "Status: DIMATIKAN"
         return "Status: Memang tidak aktif"
 
+    # --- FUNGSI UNTUK MENYIMPAN PETA ---
     def save_map(self, map_name):
-        """Fungsi baru untuk menyimpan peta."""
+        """Menyimpan peta ke folder 'autonomus_mobile_robot/maps'."""
         try:
+            # ==== PERUBAHAN 1: Ganti nama paket target ====
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
         except rospkg.ResourceNotFound:
             print("ERROR: Paket 'autonomus_mobile_robot' tidak ditemukan.")
@@ -111,12 +109,13 @@ class RosManager:
             print("ERROR: Nama peta tidak boleh kosong.")
             return False
 
+        # ==== PERUBAHAN 2: Ganti subfolder target menjadi 'maps' ====
         map_save_path = f"{pkg_path}/maps/{map_name}"
+        
         command = f"rosrun map_server map_saver -f {map_save_path}"
         
         print(f"INFO: Menyimpan peta ke {map_save_path}...")
         try:
-            # Jalankan perintah simpan peta
             subprocess.run(command, shell=True, check=True, timeout=10)
             print("INFO: Peta berhasil disimpan!")
             return True
@@ -127,7 +126,7 @@ class RosManager:
     def shutdown(self):
         print("INFO: Shutdown dipanggil, menghentikan semua proses...")
         self.stop_controller()
-        self.stop_mapping() # <-- BARU: Hentikan mapping saat shutdown
+        self.stop_mapping()
         
         if self.roscore_process:
             print("INFO: Menghentikan roscore...")
