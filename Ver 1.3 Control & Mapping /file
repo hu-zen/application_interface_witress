@@ -1,5 +1,5 @@
 python3 gui.py 
-[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-08_37.txt
+[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-08_42.txt
 [INFO   ] [Kivy        ] v2.2.1
 [INFO   ] [Kivy        ] Installed at "/home/iascr/.local/lib/python3.8/site-packages/kivy/__init__.py"
 [INFO   ] [Python      ] v3.8.10 (default, Mar 18 2025, 20:04:55) 
@@ -10,5 +10,31 @@ python3 gui.py
 [INFO   ] [Factory     ] 190 symbols loaded
 [INFO   ] [Image       ] Providers: img_tex, img_dds, img_sdl2, img_pil (img_ffpyplayer ignored)
 [INFO   ] topicmanager initialized
-INFO: [THREAD] Memulai roscore...
-INFO: RosManager siap.
+ Traceback (most recent call last):
+   File "gui.py", line 110, in <module>
+     MainApp().run()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 955, in run
+     self._run_prepare()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 925, in _run_prepare
+     root = self.build()
+   File "gui.py", line 56, in build
+     return Builder.load_string(kv_design)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/builder.py", line 372, in load_string
+     parser = Parser(content=string, filename=fn)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 483, in __init__
+     self.parse(content)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 597, in parse
+     rule.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 345, in precompile
+     x.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 345, in precompile
+     x.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 341, in precompile
+     x.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 194, in precompile
+     self.co_value = compile(value, self.ctx.filename or '<string>', mode)
+   File "<string>", line 8
+     'vertical'; padding: 40; spacing: 20
+               ^
+ SyntaxError: invalid syntax
+[INFO   ] signal_shutdown [atexit]
