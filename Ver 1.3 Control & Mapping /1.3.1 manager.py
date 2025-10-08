@@ -1,4 +1,4 @@
-# File: manager.py (Versi dengan Metode Delegasi Tugas)
+# File: manager.py (Versi Perbaikan untuk Masalah Jendela Tidak Terbuka)
 
 import subprocess
 import threading
@@ -19,29 +19,36 @@ class RosManager:
         self.is_controller_running = False
         self.is_mapping_running = False
         self.status_callback = status_callback
-        
-        # Publisher untuk mengirim perintah simpan peta
         self.save_map_publisher = rospy.Publisher('/save_map_command', String, queue_size=10)
         
-        self.start_roscore()
+        # ===== PERUBAHAN UTAMA DI SINI =====
+        # Jangan panggil start_roscore() langsung. Jalankan di thread terpisah.
+        roscore_thread = threading.Thread(target=self.start_roscore)
+        roscore_thread.daemon = True # Pastikan thread ini mati saat aplikasi utama ditutup
+        roscore_thread.start()
+        # ==================================
         
         self.monitor_thread = threading.Thread(target=self._monitor_processes)
         self.monitor_thread.daemon = True
         self.monitor_thread.start()
         print("INFO: RosManager siap.")
 
-    # ... (fungsi-fungsi lain seperti start_roscore, _monitor_processes, dll. tetap sama) ...
     def start_roscore(self):
+        """Fungsi ini sekarang berjalan di thread-nya sendiri, tidak akan memblokir GUI."""
         if self.roscore_process is None:
-            print("INFO: Memulai roscore...")
+            print("INFO: [THREAD] Memulai roscore...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(3)
-                print("INFO: roscore seharusnya sudah berjalan.")
+                time.sleep(3) # Jeda ini sekarang aman karena ada di thread terpisah
+                print("INFO: [THREAD] roscore seharusnya sudah berjalan.")
             except Exception as e:
-                print(f"FATAL: Gagal memulai roscore: {e}")
-                if self.status_callback: self.status_callback("main_menu", "status_label", "FATAL! Gagal memulai roscore.")
+                print(f"FATAL: [THREAD] Gagal memulai roscore: {e}")
+                if self.status_callback:
+                    self.status_callback("main_menu", "status_label", "FATAL! Gagal memulai roscore.")
+        else:
+            print("INFO: [THREAD] roscore sudah berjalan.")
 
+    # ... (Semua fungsi lain dari _monitor_processes hingga shutdown tetap SAMA PERSIS seperti sebelumnya) ...
     def _monitor_processes(self):
         while True:
             if self.is_controller_running and self.controller_process and self.controller_process.poll() is not None:
@@ -83,7 +90,6 @@ class RosManager:
         return "Status: Memang tidak aktif"
 
     def save_map(self, map_name):
-        """Hanya mempublikasikan nama peta ke 'Pekerja'."""
         if not map_name:
             self.status_callback("mapping", "mapping_status_label", "GAGAL: Nama peta kosong.")
             return
