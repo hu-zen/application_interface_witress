@@ -1,0 +1,5 @@
+<launch>
+    <include file="$(find autonomus_mobile_robot)/launch/mapping.launch" />
+
+    <node pkg="waiterbot_interface" type="save_map_service.py" name="map_saver_service_node" output="screen" />
+</launch>
