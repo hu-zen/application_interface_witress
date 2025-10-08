@@ -1,124 +1,68 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-from kivy.app import App
-from kivy.lang import Builder
-from kivy.uix.screenmanager import Screen
-from kivy.clock import mainthread
+import rospy
+import subprocess
+import os
+import rospkg
+from std_srvs.srv import Trigger, TriggerResponse
 
-from manager import RosManager
+# Variabel global untuk menyimpan path paket
+PKG_PATH = ""
 
-class MainApp(App):
-    def build(self):
-        self.manager = RosManager(status_callback=self.update_status_label)
+def handle_save_map_request(req):
+    """Callback yang dipanggil saat service diminta."""
+    try:
+        # Dapatkan timestamp untuk nama file default jika nama tidak diberikan
+        import time
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        map_name = f"map_{timestamp}" # Nama default
         
-        kv_design = """
-ScreenManager:
-    id: sm
-    
-    Screen:
-        name: 'main_menu'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 20
-            Label:
-                text: 'Waiter Bot Control Center'
-                font_size: '30sp'
-            Button:
-                text: 'Mode Controller'
-                font_size: '22sp'
-                on_press: app.go_to_controller_mode()
-            Button:
-                text: 'Mode Mapping'
-                font_size: '22sp'
-                on_press: app.go_to_mapping_mode()
+        # Di masa depan, Anda bisa mengirim nama peta via service jika diperlukan
+        # Untuk sekarang, kita gunakan nama dengan timestamp
+        
+        rospy.loginfo("Permintaan penyimpanan peta diterima.")
+        
+        if not PKG_PATH:
+            rospy.logerr("Path paket 'autonomus_mobile_robot' tidak ditemukan.")
+            return TriggerResponse(success=False, message="Package path not found.")
 
-    Screen:
-        name: 'controller'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 20
-            Label:
-                id: controller_status_label
-                text: 'Status: Siap'
-                font_size: '20sp'
-            Button:
-                text: 'Stop & Kembali ke Menu'
-                font_size: '22sp'
-                on_press: app.exit_controller_mode()
+        # Bentuk path lengkap untuk menyimpan peta
+        map_save_path = os.path.join(PKG_PATH, 'maps', map_name)
+        command = f"rosrun map_server map_saver -f {map_save_path}"
+        
+        rospy.loginfo(f"Menjalankan perintah: {command}")
+        
+        # Jalankan perintah map_saver
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate(timeout=15) # Tunggu hingga selesai
+        
+        if process.returncode == 0:
+            rospy.loginfo(f"Peta berhasil disimpan sebagai '{map_name}.yaml' dan '{map_name}.pgm'")
+            return TriggerResponse(success=True, message=f"Peta '{map_name}' berhasil disimpan.")
+        else:
+            rospy.logerr(f"Gagal menyimpan peta. Error: {stderr.decode('utf-8')}")
+            return TriggerResponse(success=False, message=f"Gagal menyimpan peta: {stderr.decode('utf-8')}")
             
-    Screen:
-        name: 'mapping'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 20
-            Label:
-                id: mapping_status_label
-                text: 'Status: Siap'
-                font_size: '20sp'
-                size_hint_y: 0.3
-            TextInput:
-                id: map_name_input
-                hint_text: 'Ketik nama peta di sini...'
-                font_size: '20sp'
-                size_hint_y: 0.2
-            Button:
-                text: 'Simpan Peta'
-                font_size: '22sp'
-                on_press: app.save_map()
-            Button:
-                text: 'Selesai Mapping & Kembali'
-                font_size: '22sp'
-                on_press: app.exit_mapping_mode()
-"""
-        return Builder.load_string(kv_design)
+    except Exception as e:
+        rospy.logerr(f"Exception saat mencoba menyimpan peta: {str(e)}")
+        return TriggerResponse(success=False, message=str(e))
 
-    def go_to_controller_mode(self):
-        status = self.manager.start_controller()
-        self.update_status_label('controller', 'controller_status_label', status)
-        self.root.current = 'controller'
+def map_saver_server():
+    global PKG_PATH
+    rospy.init_node('map_saver_service_node')
+    
+    # Dapatkan path paket sekali saat node dimulai
+    try:
+        rospack = rospkg.RosPack()
+        PKG_PATH = rospack.get_path('autonomus_mobile_robot')
+    except rospkg.ResourceNotFound:
+        rospy.logfatal("Paket 'autonomus_mobile_robot' tidak ditemukan. Pastikan workspace sudah di-source.")
+        return
 
-    def exit_controller_mode(self):
-        self.manager.stop_controller()
-        self.root.current = 'main_menu'
+    # Buat ROS Service dengan nama 'save_map_service' dan tipe Trigger
+    s = rospy.Service('save_map_service', Trigger, handle_save_map_request)
+    rospy.loginfo("Service 'save_map_service' siap.")
+    rospy.spin()
 
-    def go_to_mapping_mode(self):
-        status = self.manager.start_mapping()
-        self.update_status_label('mapping', 'mapping_status_label', status)
-        self.root.current = 'mapping'
-
-    def exit_mapping_mode(self):
-        # Selalu simpan peta saat keluar, antisipasi jika pengguna lupa menekan save
-        screen = self.root.get_screen('mapping')
-        map_name = screen.ids.map_name_input.text
-        if map_name:
-             self.manager.save_map(f"{map_name}_final") # Simpan dengan nama berbeda
-             time.sleep(2) # Beri sedikit waktu untuk proses simpan
-
-        self.manager.stop_mapping()
-        self.root.current = 'main_menu'
-        
-    def save_map(self):
-        """Fungsi ini sekarang hanya mengambil nama map dan memanggil manager."""
-        screen = self.root.get_screen('mapping')
-        map_name = screen.ids.map_name_input.text
-        
-        # Panggil fungsi save_map di manager, yang sekarang non-blocking.
-        # Umpan balik (sukses/gagal) akan di-handle oleh update_status_label.
-        self.manager.save_map(map_name)
-        
-    def on_stop(self):
-        self.manager.shutdown()
-
-    @mainthread
-    def update_status_label(self, screen_name, label_id, new_text):
-        if self.root:
-            screen = self.root.get_screen(screen_name)
-            if screen and label_id in screen.ids:
-                screen.ids[label_id].text = new_text
-
-if __name__ == '__main__':
-    MainApp().run()
+if __name__ == "__main__":
+    map_saver_server()
