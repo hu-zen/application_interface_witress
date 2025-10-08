@@ -7,16 +7,12 @@ from std_msgs.msg import String
 import os
 
 def save_map_callback(message):
-    """Fungsi ini dieksekusi setiap kali ada pesan masuk untuk menyimpan peta."""
     map_name = message.data
     rospy.loginfo(f"[SaverNode] Menerima perintah untuk menyimpan peta: {map_name}")
-
     if not map_name:
         rospy.logerr("[SaverNode] Nama peta kosong, perintah dibatalkan.")
         return
 
-    # Perintah untuk membuka terminal baru dan menjalankan map_saver dengan lingkungan lengkap
-    # Pastikan path ke catkin_ws dan nama paket sudah benar
     command_to_run = f"""
     gnome-terminal -- /bin/bash -c "source /opt/ros/noetic/setup.bash; \\
     source ~/catkin_ws/devel/setup.bash; \\
@@ -25,9 +21,7 @@ def save_map_callback(message):
     echo '[INFO] Perintah Selesai. Terminal akan ditutup dalam 5 detik...'; \\
     sleep 5; exit"
     """
-    
     try:
-        # Jalankan perintah di shell baru yang terpisah
         subprocess.Popen(command_to_run, shell=True)
         rospy.loginfo("[SaverNode] Berhasil membuka terminal baru untuk map_saver.")
     except Exception as e:
