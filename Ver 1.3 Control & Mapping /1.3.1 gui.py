@@ -79,15 +79,17 @@ ScreenManager:
         return Builder.load_string(kv_design)
 
     def on_start(self):
-        """Berjalan otomatis setelah build() selesai."""
+        """Berjalan otomatis setelah build() selesai dan jendela akan muncul."""
         print("INFO: [GUI] Menjalankan 'saver_node.py' di latar belakang...")
         try:
+            # Dapatkan path absolut ke skrip saver_node.py
             saver_script_path = os.path.join(os.path.dirname(__file__), 'saver_node.py')
             self.saver_process = subprocess.Popen(['python3', saver_script_path])
             print(f"INFO: [GUI] 'saver_node.py' berjalan dengan PID: {self.saver_process.pid}")
         except Exception as e:
             print(f"FATAL: [GUI] Gagal menjalankan saver_node.py: {e}")
 
+        # Buat manager setelah 'saver_node.py' mulai berjalan
         self.manager = RosManager(status_callback=self.update_status_label)
 
     def go_to_controller_mode(self):
@@ -111,7 +113,7 @@ ScreenManager:
     def save_map(self):
         screen = self.root.get_screen('mapping')
         map_name = screen.ids.map_name_input.text
-        self.manager.save_map(map_name)
+        self.manager.save_map(map_name) # Cukup panggil manager untuk mengirim pesan
         
     def on_stop(self):
         """Saat GUI ditutup, hentikan semua proses."""
