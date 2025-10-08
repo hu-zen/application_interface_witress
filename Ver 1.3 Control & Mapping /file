@@ -1,0 +1,46 @@
+camera/rgb_rectify_color-5] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-rgb_rectify_color-5*.log
+[FATAL] [1759899329.675929833]: Failed to unload nodelet '/camera/depth_registered_rectify_depth` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.675936476]: Failed to unload nodelet '/camera/disparity_depth` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.692033927]: Failed to unload nodelet '/camera/register_depth_rgb` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.708259655]: Failed to unload nodelet '/camera/depth_registered_sw_metric_rect` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.708259658]: Failed to unload nodelet '/camera/points_xyzrgb_hw_registered` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.708274607]: Failed to unload nodelet '/camera/points_xyzrgb_sw_registered` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.753269150]: Failed to unload nodelet '/camera/disparity_registered_sw` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.794060714]: Failed to unload nodelet '/camera/depth_registered_hw_metric_rect` from manager `camera_nodelet_manager'
+[FATAL] [1759899329.809444572]: Failed to unload nodelet '/camera/depth_registered_metric` from manager `camera_nodelet_manager'
+[camera/depth_registered_sw_metric_rect-13] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-depth_registered_sw_metric_rect-13*.log
+[camera/depth_registered_rectify_depth-14] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-depth_registered_rectify_depth-14*.log
+[camera/disparity_depth-18] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-disparity_depth-18*.log
+[FATAL] [1759899329.877746145]: Failed to unload nodelet '/camera/disparity_registered_hw` from manager `camera_nodelet_manager'
+[camera/depth_metric-9] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-depth_metric-9*.log
+[camera/depth_points-10] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-depth_points-10*.log
+[camera/register_depth_rgb-11] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-register_depth_rgb-11*.log
+[camera/points_xyzrgb_sw_registered-12] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-points_xyzrgb_sw_registered-12*.log
+[camera/points_xyzrgb_hw_registered-15] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-points_xyzrgb_hw_registered-15*.log
+[camera/depth_registered_hw_metric_rect-16] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-depth_registered_hw_metric_rect-16*.log
+[camera/depth_registered_metric-17] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-depth_registered_metric-17*.log
+[camera/disparity_registered_sw-19] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-disparity_registered_sw-19*.log
+[camera/disparity_registered_hw-20] process has finished cleanly
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-disparity_registered_hw-20*.log
+[camera/camera_nodelet_manager-1] process has died [pid 40485, exit code -11, cmd /opt/ros/noetic/lib/nodelet/nodelet manager __name:=camera_nodelet_manager __log:=/home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-camera_nodelet_manager-1.log].
+log file: /home/iascr/.ros/log/f849d0c6-a3f4-11f0-9f78-a11da8e59658/camera-camera_nodelet_manager-1*.log
+
+rosrun map_server map_saver -f a1test
+[ INFO] [1759899512.453857393]: Waiting for the map
+[ INFO] [1759899512.748088638]: Received a 384 X 384 map @ 0.050 m/pix
+[ INFO] [1759899512.748116793]: Writing map occupancy data to a1test.pgm
+[ INFO] [1759899512.751290288]: Writing map occupancy data to a1test.yaml
+[ INFO] [1759899512.751383811]: Done
+
