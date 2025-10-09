@@ -1,5 +1,5 @@
-python3 gui.py 
-[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-09_17.txt
+ python3 gui.py 
+[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-09_18.txt
 [INFO   ] [Kivy        ] v2.2.1
 [INFO   ] [Kivy        ] Installed at "/home/iascr/.local/lib/python3.8/site-packages/kivy/__init__.py"
 [INFO   ] [Python      ] v3.8.10 (default, Mar 18 2025, 20:04:55) 
@@ -46,7 +46,7 @@ INFO: RosManager siap.
  During handling of the above exception, another exception occurred:
  
  Traceback (most recent call last):
-   File "gui.py", line 216, in <module>
+   File "gui.py", line 184, in <module>
      MainApp().run()
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
      runTouchApp()
@@ -64,22 +64,7 @@ INFO: RosManager siap.
    File "kivy/_clock.pyx", line 653, in kivy._clock.CyClockBase._process_events
    File "kivy/_clock.pyx", line 649, in kivy._clock.CyClockBase._process_events
    File "kivy/_clock.pyx", line 218, in kivy._clock.ClockEvent.tick
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/animation.py", line 370, in _update
-     self.stop(widget)
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/animation.py", line 236, in stop
-     self.dispatch('on_complete', widget)
-   File "kivy/_event.pyx", line 727, in kivy._event.EventDispatcher.dispatch
-   File "kivy/_event.pyx", line 1307, in kivy._event.EventObservers.dispatch
-   File "kivy/_event.pyx", line 1231, in kivy._event.EventObservers._dispatch
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/screenmanager.py", line 419, in _on_complete
-     self.screen_in.dispatch('on_enter')
-   File "kivy/_event.pyx", line 727, in kivy._event.EventDispatcher.dispatch
-   File "kivy/_event.pyx", line 1307, in kivy._event.EventObservers.dispatch
-   File "kivy/_event.pyx", line 1191, in kivy._event.EventObservers._dispatch
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/builder.py", line 55, in custom_callback
-     exec(__kvlang__.co_value, idmap)
-   File "<string>", line 92, in <module>
-   File "gui.py", line 179, in update_nav_map_list
-     grid = self.root.get_screen('nav_selection').ids.nav_map_grid
+   File "gui.py", line 148, in update_nav_map_list
+     grid = screen.ids.nav_map_grid
    File "kivy/properties.pyx", line 964, in kivy.properties.ObservableDict.__getattr__
  AttributeError: 'super' object has no attribute '__getattr__'
