@@ -1,11 +1,38 @@
-Traceback (most recent call last):
+INFO: RosManager siap.
+[INFO   ] [Window      ] Provider: sdl2
+[INFO   ] [GL          ] Using the "OpenGL" graphics system
+[INFO   ] [GL          ] Backend used <sdl2>
+[INFO   ] [GL          ] OpenGL version <b'4.6 (Compatibility Profile) Mesa 21.2.6'>
+[INFO   ] [GL          ] OpenGL vendor <b'Intel'>
+[INFO   ] [GL          ] OpenGL renderer <b'Mesa Intel(R) Graphics (ADL GT2)'>
+[INFO   ] [GL          ] OpenGL parsed version: 4, 6
+[INFO   ] [GL          ] Shading version <b'4.60'>
+[INFO   ] [GL          ] Texture max size <16384>
+[INFO   ] [GL          ] Texture max units <32>
+[INFO   ] [Window      ] auto add sdl2 input provider
+[INFO   ] [Window      ] virtual keyboard not allowed, single mode, not docked
+[INFO   ] [Clipboard   ] Provider: xclip
+[INFO   ] [CutBuffer   ] cut buffer support enabled
+[INFO   ] [GL          ] NPOT texture support is available
+[INFO   ] [ProbeSysfs  ] device match: /dev/input/event9
+[INFO   ] [MTD         ] Read event from </dev/input/event9>
+[INFO   ] [Base        ] Start application main loop
+[INFO   ] [MTD         ] </dev/input/event9> range position X is 0 - 1452
+[INFO   ] [MTD         ] </dev/input/event9> range position Y is 0 - 912
+[INFO   ] [MTD         ] </dev/input/event9> range touch major is 0 - 0
+[INFO   ] [MTD         ] </dev/input/event9> range touch minor is 0 - 0
+[INFO   ] [MTD         ] </dev/input/event9> range pressure is 0 - 255
+[INFO   ] [MTD         ] </dev/input/event9> axes inversion: X is 0, Y is 0
+[INFO   ] [MTD         ] </dev/input/event9> rotation set to 0
+[INFO   ] [Base        ] Leaving application in progress...
+ Traceback (most recent call last):
    File "kivy/properties.pyx", line 961, in kivy.properties.ObservableDict.__getattr__
  KeyError: 'nav_map_grid'
  
  During handling of the above exception, another exception occurred:
  
  Traceback (most recent call last):
-   File "gui.py", line 220, in <module>
+   File "gui.py", line 216, in <module>
      MainApp().run()
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
      runTouchApp()
@@ -23,7 +50,22 @@ Traceback (most recent call last):
    File "kivy/_clock.pyx", line 653, in kivy._clock.CyClockBase._process_events
    File "kivy/_clock.pyx", line 649, in kivy._clock.CyClockBase._process_events
    File "kivy/_clock.pyx", line 218, in kivy._clock.ClockEvent.tick
-   File "gui.py", line 181, in update_nav_map_list
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/animation.py", line 370, in _update
+     self.stop(widget)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/animation.py", line 236, in stop
+     self.dispatch('on_complete', widget)
+   File "kivy/_event.pyx", line 727, in kivy._event.EventDispatcher.dispatch
+   File "kivy/_event.pyx", line 1307, in kivy._event.EventObservers.dispatch
+   File "kivy/_event.pyx", line 1231, in kivy._event.EventObservers._dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/screenmanager.py", line 419, in _on_complete
+     self.screen_in.dispatch('on_enter')
+   File "kivy/_event.pyx", line 727, in kivy._event.EventDispatcher.dispatch
+   File "kivy/_event.pyx", line 1307, in kivy._event.EventObservers.dispatch
+   File "kivy/_event.pyx", line 1191, in kivy._event.EventObservers._dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/builder.py", line 55, in custom_callback
+     exec(__kvlang__.co_value, idmap)
+   File "<string>", line 92, in <module>
+   File "gui.py", line 179, in update_nav_map_list
      grid = self.root.get_screen('nav_selection').ids.nav_map_grid
    File "kivy/properties.pyx", line 964, in kivy.properties.ObservableDict.__getattr__
  AttributeError: 'super' object has no attribute '__getattr__'
