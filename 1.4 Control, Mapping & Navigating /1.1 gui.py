@@ -36,7 +36,6 @@ ScreenManager:
                 text: 'Mode Mapping'
                 font_size: '22sp'
                 on_press: sm.current = 'pre_mapping'
-            # ===== TOMBOL BARU UNTUK NAVIGASI =====
             Button:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
@@ -102,9 +101,10 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_mapping_mode()
 
-    # ===== LAYAR-LAYAR BARU UNTUK NAVIGASI =====
     Screen:
         name: 'nav_selection'
+        # ===== PERUBAHAN 1: Tambahkan event 'on_enter' di sini =====
+        on_enter: app.update_nav_map_list()
         BoxLayout:
             orientation: 'vertical'
             padding: 20
@@ -139,7 +139,6 @@ ScreenManager:
                 text: 'Stop Navigasi & Kembali'
                 font_size: '22sp'
                 on_press: app.exit_navigation_mode()
-    # ============================================
 """
         return Builder.load_string(kv_design)
 
@@ -169,15 +168,13 @@ ScreenManager:
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
 
-    # ===== FUNGSI-FUNGSI BARU UNTUK NAVIGASI =====
+    # ===== PERUBAHAN 2: Sederhanakan fungsi-fungsi ini =====
     def go_to_nav_selection(self):
-        """Pindah ke layar pemilihan peta dan update daftarnya."""
+        """Hanya pindah layar. Sisanya diurus oleh on_enter."""
         self.root.current = 'nav_selection'
-        # Memberi jeda sepersekian detik agar layar sempat dimuat
-        Clock.schedule_once(self.update_nav_map_list, 0.1)
 
-    def update_nav_map_list(self, dt):
-        """Mendapatkan daftar peta dan membuat tombolnya."""
+    def update_nav_map_list(self):
+        """Mendapatkan daftar peta dan membuat tombolnya. Dipanggil oleh on_enter."""
         grid = self.root.get_screen('nav_selection').ids.nav_map_grid
         grid.clear_widgets()
         
@@ -192,13 +189,11 @@ ScreenManager:
             grid.add_widget(btn)
 
     def start_navigation_with_map(self, map_name, *args):
-        """Memulai navigasi dengan peta yang dipilih."""
         status = self.manager.start_navigation(map_name)
         self.root.current = 'navigation'
         self.update_status_label('navigation', 'navigation_status_label', status)
         
     def exit_navigation_mode(self):
-        """Menghentikan navigasi dan kembali ke menu."""
         self.manager.stop_navigation()
         self.root.current = 'main_menu'
     # ============================================
