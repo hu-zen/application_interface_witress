@@ -1,22 +1,22 @@
-# File: manager.py (Versi dengan Mode Controller, Mapping, & Navigasi)
+# File: manager.py (Versi Stabil)
 
 import subprocess
 import time
 import os
 import signal
 import rospkg
-import glob # <-- BARU: Untuk mencari file
+import glob
 
 class RosManager:
     def __init__(self, status_callback):
         self.roscore_process = None
         self.controller_process = None
         self.mapping_process = None
-        self.navigation_process = None # <-- BARU: Proses untuk navigasi
+        self.navigation_process = None
 
         self.is_controller_running = False
         self.is_mapping_running = False
-        self.is_navigation_running = False # <-- BARU: Status untuk navigasi
+        self.is_navigation_running = False
         
         self.status_callback = status_callback
         self.rospack = rospkg.RosPack()
@@ -49,7 +49,6 @@ class RosManager:
                 print(f"WARN: Gagal menghentikan '{name}' dengan normal.")
         return None
 
-    # --- FUNGSI-FUNGSI MODE LAMA (Tidak Berubah) ---
     def start_controller(self):
         if not self.is_controller_running:
             command = "roslaunch my_robot_pkg controller.launch"
@@ -95,9 +94,7 @@ class RosManager:
         except Exception as e:
             print(f"ERROR: Gagal menyimpan peta saat keluar: {e}")
 
-    # ===== FUNGSI-FUNGSI BARU UNTUK NAVIGASI =====
     def get_available_maps(self):
-        """Mencari semua file .yaml di folder maps."""
         try:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
             maps_dir = os.path.join(pkg_path, 'maps')
@@ -110,14 +107,11 @@ class RosManager:
             return []
 
     def start_navigation(self, map_name):
-        """Memulai navigation.launch dengan peta yang dipilih."""
         if not self.is_navigation_running:
             try:
                 pkg_path = self.rospack.get_path('autonomus_mobile_robot')
                 map_file_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
-                
                 command = f"roslaunch autonomus_mobile_robot navigation.launch map_file:={map_file_path}"
-                
                 self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
                 self.is_navigation_running = True
                 print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
@@ -128,18 +122,15 @@ class RosManager:
         return "Status: Navigasi Sudah Aktif"
         
     def stop_navigation(self):
-        """Menghentikan proses navigasi."""
         if self.is_navigation_running:
             self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
             self.is_navigation_running = False
         return "Status: DIMATIKAN"
     
-    # ============================================
-
     def shutdown(self):
-        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
+        print("INFO: Shutdown dipanggil...")
         self.stop_mapping()
         self.stop_controller()
-        self.stop_navigation() # <-- BARU: Hentikan navigasi saat shutdown
+        self.stop_navigation()
         if self.roscore_process:
             self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
