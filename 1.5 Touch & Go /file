@@ -1,0 +1,22 @@
+ Traceback (most recent call last):
+   File "gui.py", line 269, in <module>
+     MainApp().run()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
+     runTouchApp()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 574, in runTouchApp
+     EventLoop.mainloop()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 339, in mainloop
+     self.idle()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 379, in idle
+     Clock.tick()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 733, in tick
+     self.post_idle(ts, self.idle())
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 689, in idle
+     usleep(1000000 * sleeptime)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 965, in usleep
+     _usleep(microseconds, self._sleep_obj)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 556, in _usleep
+     _libc_usleep(int(microseconds))
+ KeyboardInterrupt
+[INFO   ] signal_shutdown [atexit]
+
