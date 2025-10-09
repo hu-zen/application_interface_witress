@@ -1,0 +1,28 @@
+NFO: RosManager siap.
+ Traceback (most recent call last):
+   File "gui.py", line 166, in <module>
+     MainApp().run()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 955, in run
+     self._run_prepare()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 925, in _run_prepare
+     root = self.build()
+   File "gui.py", line 95, in build
+     return Builder.load_string(kv_design)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/builder.py", line 372, in load_string
+     parser = Parser(content=string, filename=fn)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 483, in __init__
+     self.parse(content)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 597, in parse
+     rule.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 345, in precompile
+     x.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 345, in precompile
+     x.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 341, in precompile
+     x.precompile()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/parser.py", line 194, in precompile
+     self.co_value = compile(value, self.ctx.filename or '<string>', mode)
+   File "<string>", line 8
+     'vertical'; padding: 40; spacing: 20
+               ^
+ SyntaxError: invalid syntax
