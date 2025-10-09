@@ -39,9 +39,10 @@ ScreenManager:
             Button:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
+                # ===== PERUBAHAN 1: Kembalikan on_press ke fungsi Python =====
                 on_press: app.go_to_nav_selection()
                 
-    Screen: # Layar Pre-Mapping
+    Screen:
         name: 'pre_mapping'
         BoxLayout:
             orientation: 'vertical'
@@ -66,7 +67,7 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
 
-    Screen: # Layar Controller
+    Screen:
         name: 'controller'
         BoxLayout:
             orientation: 'vertical'
@@ -81,7 +82,7 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_controller_mode()
                 
-    Screen: # Layar Mapping
+    Screen:
         name: 'mapping'
         BoxLayout:
             orientation: 'vertical'
@@ -166,15 +167,14 @@ ScreenManager:
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
 
-    # ===== PERUBAHAN UTAMA DI SINI =====
+    # ===== PERUBAHAN 2: Kembalikan logika Clock.schedule_once ke sini =====
     def go_to_nav_selection(self):
         """Pindah layar DULU, baru jadwalkan update daftar peta."""
         self.root.current = 'nav_selection'
-        # Gunakan Clock.schedule_once yang sudah terbukti stabil
         Clock.schedule_once(self.update_nav_map_list, 0.1)
 
     def update_nav_map_list(self, dt):
-        """Fungsi ini sekarang dijamin aman untuk dipanggil."""
+        """Fungsi ini sekarang dijamin aman untuk dipanggil setelah jeda."""
         grid = self.root.get_screen('nav_selection').ids.nav_map_grid
         grid.clear_widgets()
         
