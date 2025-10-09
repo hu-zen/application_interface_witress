@@ -39,9 +39,10 @@ ScreenManager:
             Button:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
-                on_press: app.go_to_nav_selection()
+                # ===== PERUBAHAN 1: Sederhanakan on_press =====
+                on_press: sm.current = 'nav_selection'
                 
-    Screen: # Layar Pre-Mapping
+    Screen:
         name: 'pre_mapping'
         BoxLayout:
             orientation: 'vertical'
@@ -66,7 +67,7 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
 
-    Screen: # Layar Controller
+    Screen:
         name: 'controller'
         BoxLayout:
             orientation: 'vertical'
@@ -81,7 +82,7 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_controller_mode()
                 
-    Screen: # Layar Mapping
+    Screen:
         name: 'mapping'
         BoxLayout:
             orientation: 'vertical'
@@ -103,7 +104,8 @@ ScreenManager:
 
     Screen:
         name: 'nav_selection'
-        # ===== PERUBAHAN 1: Tambahkan event 'on_enter' di sini =====
+        # ===== PERUBAHAN 2: Tambahkan event 'on_enter' =====
+        # Ini akan memanggil fungsi update_nav_map_list SETELAH layar siap
         on_enter: app.update_nav_map_list()
         BoxLayout:
             orientation: 'vertical'
@@ -142,7 +144,6 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # --- FUNGSI-FUNGSI LAMA ---
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -168,13 +169,13 @@ ScreenManager:
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
 
-    # ===== PERUBAHAN 2: Sederhanakan fungsi-fungsi ini =====
+    # ===== PERUBAHAN 3: Fungsi-fungsi Navigasi disederhanakan =====
     def go_to_nav_selection(self):
-        """Hanya pindah layar. Sisanya diurus oleh on_enter."""
-        self.root.current = 'nav_selection'
+        """Fungsi ini tidak lagi digunakan, karena on_press langsung pindah layar."""
+        pass # Dibiarkan kosong untuk keamanan, tapi tidak akan terpanggil
 
     def update_nav_map_list(self):
-        """Mendapatkan daftar peta dan membuat tombolnya. Dipanggil oleh on_enter."""
+        """Dipanggil oleh on_enter, jadi dijamin aman."""
         grid = self.root.get_screen('nav_selection').ids.nav_map_grid
         grid.clear_widgets()
         
