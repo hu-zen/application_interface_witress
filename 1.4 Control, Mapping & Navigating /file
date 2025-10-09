@@ -1,5 +1,5 @@
 python3 gui.py 
-[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-09_16.txt
+[INFO   ] [Logger      ] Record log in /home/iascr/.kivy/logs/kivy_25-10-09_17.txt
 [INFO   ] [Kivy        ] v2.2.1
 [INFO   ] [Kivy        ] Installed at "/home/iascr/.local/lib/python3.8/site-packages/kivy/__init__.py"
 [INFO   ] [Python      ] v3.8.10 (default, Mar 18 2025, 20:04:55) 
@@ -9,6 +9,7 @@ python3 gui.py
 [INFO   ] [Logger      ] Purge finished!
 [INFO   ] [Factory     ] 190 symbols loaded
 [INFO   ] [Image       ] Providers: img_tex, img_dds, img_sdl2, img_pil (img_ffpyplayer ignored)
+[INFO   ] [Text        ] Provider: sdl2
 INFO: Memulai roscore di latar belakang...
 INFO: roscore seharusnya sudah aktif.
 INFO: RosManager siap.
@@ -24,7 +25,6 @@ INFO: RosManager siap.
 [INFO   ] [GL          ] Texture max units <32>
 [INFO   ] [Window      ] auto add sdl2 input provider
 [INFO   ] [Window      ] virtual keyboard not allowed, single mode, not docked
-[INFO   ] [Text        ] Provider: sdl2
 [INFO   ] [Clipboard   ] Provider: xclip
 [INFO   ] [CutBuffer   ] cut buffer support enabled
 [INFO   ] [GL          ] NPOT texture support is available
@@ -38,16 +38,15 @@ INFO: RosManager siap.
 [INFO   ] [MTD         ] </dev/input/event9> range pressure is 0 - 255
 [INFO   ] [MTD         ] </dev/input/event9> axes inversion: X is 0, Y is 0
 [INFO   ] [MTD         ] </dev/input/event9> rotation set to 0
-INFO: Peta ditemukan: ['aaa', 'coba1', 'coba2cot', 'coba2cot2', 'cot_lt1_v2', 'cot_lt1_v3', 'cot_lt2', 'cot_v1', 'cotmal', 'cotnew', 'departemen', 'husein1', 'husein6', 'husein7', 'jurnal_tepat_v3', 'jurnal_tepat_ver2', 'jurnaltp', 'jurnaltp02', 'latihan1', 'latihan2', 'lski_gmap', 'lski_lamp1', 'lski_lamp2', 'lski_lamp3', 'lski_lamp4', 'lski_lamp5', 'lski_lux1', 'lski_lux2', 'lski_lux3', 'lski_lux4', 'lski_map', 'lski_workspace', 'lski_workspace_comp', 'lt3_sun1', 'lt3_sun2', 'map', 'map09', 'my_testing', 'my_testing1234', 'mymap', 'stuce1']
 [INFO   ] [Base        ] Leaving application in progress...
  Traceback (most recent call last):
    File "kivy/properties.pyx", line 961, in kivy.properties.ObservableDict.__getattr__
- KeyError: 'map_spinner'
+ KeyError: 'nav_map_grid'
  
  During handling of the above exception, another exception occurred:
  
  Traceback (most recent call last):
-   File "gui.py", line 218, in <module>
+   File "gui.py", line 216, in <module>
      MainApp().run()
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
      runTouchApp()
@@ -79,8 +78,8 @@ INFO: Peta ditemukan: ['aaa', 'coba1', 'coba2cot', 'coba2cot2', 'cot_lt1_v2', 'c
    File "kivy/_event.pyx", line 1191, in kivy._event.EventObservers._dispatch
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/builder.py", line 55, in custom_callback
      exec(__kvlang__.co_value, idmap)
-   File "<string>", line 54, in <module>
-   File "gui.py", line 186, in populate_map_list
-     screen.ids.map_spinner.values = map_list
+   File "<string>", line 92, in <module>
+   File "gui.py", line 179, in update_nav_map_list
+     grid = self.root.get_screen('nav_selection').ids.nav_map_grid
    File "kivy/properties.pyx", line 964, in kivy.properties.ObservableDict.__getattr__
  AttributeError: 'super' object has no attribute '__getattr__'
