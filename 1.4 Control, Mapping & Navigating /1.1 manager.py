@@ -1,4 +1,4 @@
-# File: manager.py (Versi Stabil)
+# File: manager.py (Versi dengan Integrasi Controller di Navigasi)
 
 import subprocess
 import time
@@ -49,6 +49,7 @@ class RosManager:
                 print(f"WARN: Gagal menghentikan '{name}' dengan normal.")
         return None
 
+    # --- FUNGSI-FUNGSI MODE LAMA ---
     def start_controller(self):
         if not self.is_controller_running:
             command = "roslaunch my_robot_pkg controller.launch"
@@ -106,14 +107,22 @@ class RosManager:
             print(f"ERROR: Gagal mencari peta: {e}")
             return []
 
+    # ===== PERUBAHAN UTAMA DI SINI =====
     def start_navigation(self, map_name):
+        """Memulai navigation.launch DAN controller.launch."""
         if not self.is_navigation_running:
             try:
                 pkg_path = self.rospack.get_path('autonomus_mobile_robot')
                 map_file_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
+                
                 command = f"roslaunch autonomus_mobile_robot navigation.launch map_file:={map_file_path}"
+                
                 self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
                 self.is_navigation_running = True
+                
+                # Jalankan juga controller agar robot bisa bergerak!
+                self.start_controller()
+                
                 print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
                 return f"Navigasi dengan peta\n'{map_name}' AKTIF"
             except Exception as e:
@@ -122,13 +131,18 @@ class RosManager:
         return "Status: Navigasi Sudah Aktif"
         
     def stop_navigation(self):
+        """Menghentikan proses navigasi DAN controller."""
         if self.is_navigation_running:
             self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
             self.is_navigation_running = False
+            
+            # Hentikan juga controller-nya
+            self.stop_controller()
+            
         return "Status: DIMATIKAN"
     
     def shutdown(self):
-        print("INFO: Shutdown dipanggil...")
+        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
         self.stop_mapping()
         self.stop_controller()
         self.stop_navigation()
