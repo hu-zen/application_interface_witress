@@ -9,7 +9,6 @@ import glob
 
 class RosManager:
     def __init__(self, status_callback):
-        # ... (Semua kode dari __init__ hingga _save_map_on_exit tetap sama seperti versi Anda yang berhasil) ...
         self.roscore_process = None
         self.controller_process = None
         self.mapping_process = None
