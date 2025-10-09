@@ -9,11 +9,10 @@ from kivy.uix.label import Label
 from kivy.clock import mainthread, Clock
 from functools import partial
 
-# ===== Tambahan untuk Fitur Baru =====
+# Tambahan untuk Fitur Baru
 from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior
 import yaml
-# ====================================
 
 from manager import RosManager
 
@@ -39,37 +38,31 @@ class NavSelectionScreen(Screen):
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
-# ===== Kelas Baru untuk Layar Navigasi Interaktif =====
 class MapImage(TouchRippleBehavior, Image):
     def on_touch_down(self, touch):
-        # Hanya proses jika sentuhan berada di dalam area widget
         if self.collide_point(*touch.pos):
-            # Panggil fungsi on_map_touch yang ada di MainApp
             App.get_running_app().on_map_touch(touch, self)
             return super().on_touch_down(touch)
 
 class NavigationScreen(Screen):
     def on_enter(self):
-        # Saat layar ini ditampilkan, muat gambar peta yang sesuai
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
 
     def load_map_image(self, map_name):
         if map_name:
             app = App.get_running_app()
-            # Dapatkan path lengkap ke file PGM
             map_image_path = app.manager.get_map_image_path(map_name)
             if map_image_path:
-                # Muat gambar dan juga baca metadata dari file YAML
                 self.ids.map_viewer.source = map_image_path
-                app.manager.load_map_metadata(map_name) # Perintahkan manager untuk memuat metadata
-                self.ids.map_viewer.reload() # Muat ulang gambar
-# ==========================================================
+                app.manager.load_map_metadata(map_name)
+                self.ids.map_viewer.reload()
 
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
+        # String KV yang sudah diformat ulang dengan indentasi yang benar
         kv_design = """
 <NavSelectionScreen>:
     BoxLayout:
@@ -92,36 +85,30 @@ class MainApp(App):
             size_hint_y: 0.15
             on_press: root.manager.current = 'main_menu'
 
-# ===== Desain untuk Layar Navigasi Baru =====
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
         spacing: 10
-
         MapImage:
             id: map_viewer
-            source: '' # Akan diisi secara dinamis
+            source: ''
             allow_stretch: True
             keep_ratio: False
-            
         BoxLayout:
             size_hint_y: None
             height: '60dp'
             orientation: 'horizontal'
             spacing: 10
-            
             Label:
                 id: navigation_status_label
                 text: 'Status: Siap'
                 font_size: '18sp'
-                
             Button:
                 text: 'Stop & Kembali'
                 font_size: '20sp'
                 on_press: app.exit_navigation_mode()
-# ============================================
 
 ScreenManager:
     id: sm
@@ -211,26 +198,21 @@ ScreenManager:
     NavSelectionScreen:
         name: 'nav_selection'
 
-    # Gunakan kelas baru kita untuk layar navigasi
     NavigationScreen:
         name: 'navigation'
 """
         return Builder.load_string(kv_design)
 
-    # ===== Fungsi Baru untuk Menangani Sentuhan pada Peta =====
     def on_map_touch(self, touch, image_widget):
-        # Dapatkan posisi sentuhan relatif terhadap widget gambar
         local_x = touch.x - image_widget.x
         local_y = touch.y - image_widget.y
         
-        # Panggil fungsi di manager untuk konversi dan pengiriman goal
         self.manager.send_goal_from_pixel(
             local_x, 
             local_y, 
             image_widget.width, 
             image_widget.height
         )
-    # ========================================================
 
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
@@ -265,7 +247,6 @@ ScreenManager:
     def start_navigation_with_map(self, map_name, *args):
         status = self.manager.start_navigation(map_name)
         self.root.current = 'navigation'
-        # Status label akan diupdate di dalam NavigationScreen.on_enter
         
     def exit_navigation_mode(self):
         self.manager.stop_navigation()
