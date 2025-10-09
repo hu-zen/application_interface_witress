@@ -11,11 +11,65 @@ from functools import partial
 
 from manager import RosManager
 
+# ===== PERUBAHAN 1: Buat Class Khusus untuk Layar Pemilihan Peta =====
+class NavSelectionScreen(Screen):
+    def on_enter(self):
+        """
+        Metode ini dipanggil oleh Kivy secara otomatis SETELAH layar ini
+        selesai dimuat dan ditampilkan. Ini adalah tempat paling aman.
+        """
+        self.update_map_list()
+
+    def update_map_list(self):
+        """Mengisi layar dengan tombol-tombol peta."""
+        # 'self.ids' di sini merujuk langsung ke id di dalam layar ini, jadi lebih aman
+        grid = self.ids.nav_map_grid
+        grid.clear_widgets()
+        
+        # Dapatkan instance aplikasi utama untuk mengakses manager
+        app = App.get_running_app()
+        map_names = app.manager.get_available_maps()
+        
+        if not map_names:
+            grid.add_widget(Label(text="Tidak ada peta ditemukan."))
+            return
+            
+        for name in map_names:
+            btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
+            # Hubungkan tombol ke fungsi di aplikasi utama
+            btn.bind(on_press=partial(app.start_navigation_with_map, name))
+            grid.add_widget(btn)
+# =======================================================================
+
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
+# ===== PERUBAHAN 2: Daftarkan class baru kita di sini =====
+<NavSelectionScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 20
+        spacing: 10
+        Label:
+            text: 'Pilih Peta untuk Navigasi'
+            font_size: '24sp'
+            size_hint_y: 0.15
+        ScrollView:
+            GridLayout:
+                id: nav_map_grid # ID ini sekarang milik NavSelectionScreen
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 10
+        Button:
+            text: 'Kembali ke Menu'
+            size_hint_y: 0.15
+            on_press: root.manager.current = 'main_menu'
+
+# ==========================================================
+
 ScreenManager:
     id: sm
     
@@ -39,8 +93,7 @@ ScreenManager:
             Button:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
-                # ===== PERUBAHAN 1: Kembalikan on_press ke fungsi Python =====
-                on_press: app.go_to_nav_selection()
+                on_press: sm.current = 'nav_selection'
                 
     Screen:
         name: 'pre_mapping'
@@ -102,28 +155,10 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_mapping_mode()
 
-    Screen:
+    # ===== PERUBAHAN 3: Gunakan class baru kita di ScreenManager =====
+    NavSelectionScreen:
         name: 'nav_selection'
-        # Hapus 'on_enter' dari sini
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 20
-            spacing: 10
-            Label:
-                text: 'Pilih Peta untuk Navigasi'
-                font_size: '24sp'
-                size_hint_y: 0.15
-            ScrollView:
-                GridLayout:
-                    id: nav_map_grid
-                    cols: 1
-                    size_hint_y: None
-                    height: self.minimum_height
-                    spacing: 10
-            Button:
-                text: 'Kembali ke Menu'
-                size_hint_y: 0.15
-                on_press: sm.current = 'main_menu'
+    # ===============================================================
 
     Screen:
         name: 'navigation'
@@ -142,6 +177,7 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
+    # ... (fungsi-fungsi lain tidak perlu diubah) ...
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -167,27 +203,6 @@ ScreenManager:
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
 
-    # ===== PERUBAHAN 2: Kembalikan logika Clock.schedule_once ke sini =====
-    def go_to_nav_selection(self):
-        """Pindah layar DULU, baru jadwalkan update daftar peta."""
-        self.root.current = 'nav_selection'
-        Clock.schedule_once(self.update_nav_map_list, 0.1)
-
-    def update_nav_map_list(self, dt):
-        """Fungsi ini sekarang dijamin aman untuk dipanggil setelah jeda."""
-        grid = self.root.get_screen('nav_selection').ids.nav_map_grid
-        grid.clear_widgets()
-        
-        map_names = self.manager.get_available_maps()
-        if not map_names:
-            grid.add_widget(Label(text="Tidak ada peta ditemukan."))
-            return
-            
-        for name in map_names:
-            btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
-            btn.bind(on_press=partial(self.start_navigation_with_map, name))
-            grid.add_widget(btn)
-
     def start_navigation_with_map(self, map_name, *args):
         status = self.manager.start_navigation(map_name)
         self.root.current = 'navigation'
@@ -196,7 +211,6 @@ ScreenManager:
     def exit_navigation_mode(self):
         self.manager.stop_navigation()
         self.root.current = 'main_menu'
-    # ============================================
         
     def on_stop(self):
         self.manager.shutdown()
