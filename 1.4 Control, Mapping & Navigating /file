@@ -26,3 +26,34 @@ NFO: RosManager siap.
      'vertical'; padding: 40; spacing: 20
                ^
  SyntaxError: invalid syntax
+
+ Traceback (most recent call last):
+   File "kivy/properties.pyx", line 961, in kivy.properties.ObservableDict.__getattr__
+ KeyError: 'nav_map_grid'
+ 
+ During handling of the above exception, another exception occurred:
+ 
+ Traceback (most recent call last):
+   File "gui.py", line 220, in <module>
+     MainApp().run()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
+     runTouchApp()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 574, in runTouchApp
+     EventLoop.mainloop()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 339, in mainloop
+     self.idle()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 379, in idle
+     Clock.tick()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 733, in tick
+     self.post_idle(ts, self.idle())
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 776, in post_idle
+     self._process_events()
+   File "kivy/_clock.pyx", line 620, in kivy._clock.CyClockBase._process_events
+   File "kivy/_clock.pyx", line 653, in kivy._clock.CyClockBase._process_events
+   File "kivy/_clock.pyx", line 649, in kivy._clock.CyClockBase._process_events
+   File "kivy/_clock.pyx", line 218, in kivy._clock.ClockEvent.tick
+   File "gui.py", line 181, in update_nav_map_list
+     grid = self.root.get_screen('nav_selection').ids.nav_map_grid
+   File "kivy/properties.pyx", line 964, in kivy.properties.ObservableDict.__getattr__
+ AttributeError: 'super' object has no attribute '__getattr__'
+
