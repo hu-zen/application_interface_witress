@@ -39,10 +39,9 @@ ScreenManager:
             Button:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
-                # ===== PERUBAHAN 1: Sederhanakan on_press =====
-                on_press: sm.current = 'nav_selection'
+                on_press: app.go_to_nav_selection()
                 
-    Screen:
+    Screen: # Layar Pre-Mapping
         name: 'pre_mapping'
         BoxLayout:
             orientation: 'vertical'
@@ -67,7 +66,7 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
 
-    Screen:
+    Screen: # Layar Controller
         name: 'controller'
         BoxLayout:
             orientation: 'vertical'
@@ -82,7 +81,7 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_controller_mode()
                 
-    Screen:
+    Screen: # Layar Mapping
         name: 'mapping'
         BoxLayout:
             orientation: 'vertical'
@@ -104,9 +103,7 @@ ScreenManager:
 
     Screen:
         name: 'nav_selection'
-        # ===== PERUBAHAN 2: Tambahkan event 'on_enter' =====
-        # Ini akan memanggil fungsi update_nav_map_list SETELAH layar siap
-        on_enter: app.update_nav_map_list()
+        # Hapus 'on_enter' dari sini
         BoxLayout:
             orientation: 'vertical'
             padding: 20
@@ -169,19 +166,21 @@ ScreenManager:
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
 
-    # ===== PERUBAHAN 3: Fungsi-fungsi Navigasi disederhanakan =====
+    # ===== PERUBAHAN UTAMA DI SINI =====
     def go_to_nav_selection(self):
-        """Fungsi ini tidak lagi digunakan, karena on_press langsung pindah layar."""
-        pass # Dibiarkan kosong untuk keamanan, tapi tidak akan terpanggil
+        """Pindah layar DULU, baru jadwalkan update daftar peta."""
+        self.root.current = 'nav_selection'
+        # Gunakan Clock.schedule_once yang sudah terbukti stabil
+        Clock.schedule_once(self.update_nav_map_list, 0.1)
 
-    def update_nav_map_list(self):
-        """Dipanggil oleh on_enter, jadi dijamin aman."""
+    def update_nav_map_list(self, dt):
+        """Fungsi ini sekarang dijamin aman untuk dipanggil."""
         grid = self.root.get_screen('nav_selection').ids.nav_map_grid
         grid.clear_widgets()
         
         map_names = self.manager.get_available_maps()
         if not map_names:
-            grid.add_widget(Label(text="Tidak ada peta ditemukan di folder 'maps'."))
+            grid.add_widget(Label(text="Tidak ada peta ditemukan."))
             return
             
         for name in map_names:
