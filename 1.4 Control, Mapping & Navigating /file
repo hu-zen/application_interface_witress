@@ -5,7 +5,7 @@
  During handling of the above exception, another exception occurred:
  
  Traceback (most recent call last):
-   File "gui.py", line 215, in <module>
+   File "gui.py", line 184, in <module>
      MainApp().run()
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
      runTouchApp()
@@ -23,7 +23,7 @@
    File "kivy/_clock.pyx", line 653, in kivy._clock.CyClockBase._process_events
    File "kivy/_clock.pyx", line 649, in kivy._clock.CyClockBase._process_events
    File "kivy/_clock.pyx", line 218, in kivy._clock.ClockEvent.tick
-   File "gui.py", line 178, in update_nav_map_list
-     grid = self.root.get_screen('nav_selection').ids.nav_map_grid
+   File "gui.py", line 148, in update_nav_map_list
+     grid = screen.ids.nav_map_grid
    File "kivy/properties.pyx", line 964, in kivy.properties.ObservableDict.__getattr__
  AttributeError: 'super' object has no attribute '__getattr__'
