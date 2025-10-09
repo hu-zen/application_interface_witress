@@ -115,6 +115,7 @@ class RosManager:
             print(f"ERROR: Gagal mencari peta: {e}")
             return []
 
+    # ===== FUNGSI DIPERBAIKI =====
     def start_navigation(self, map_name):
         if not self.is_navigation_running:
             try:
@@ -127,6 +128,12 @@ class RosManager:
                 self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
                 self.is_navigation_running = True
                 self.start_controller()
+
+                # Inisialisasi publisher di sini, setelah node-node lain mungkin sudah mulai aktif
+                # Kita tidak perlu sleep karena Kivy akan memanggil ini sekali saja
+                print("INFO: Menginisialisasi goal publisher...")
+                self.goal_publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
+                print("INFO: Goal publisher berhasil diinisialisasi.")
                 
                 print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
                 return f"Navigasi dengan peta\n'{map_name}' AKTIF"
@@ -140,15 +147,17 @@ class RosManager:
             self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
             self.is_navigation_running = False
             self.stop_controller()
+
+            # Reset variabel saat mode dihentikan
             self.current_map_name = None
             self.map_metadata = None
+            if self.goal_publisher:
+                self.goal_publisher.unregister()
+                print("INFO: Goal publisher di-unregister.")
             self.goal_publisher = None
         return "Status: DIMATIKAN"
     
-    # ===== Fungsi-fungsi Baru untuk Navigasi Interaktif =====
-    
     def get_map_image_path(self, map_name):
-        """Mendapatkan path absolut ke file gambar .pgm dari nama peta."""
         try:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
             map_image_path = os.path.join(pkg_path, 'maps', f"{map_name}.pgm")
@@ -159,7 +168,6 @@ class RosManager:
         return None
 
     def load_map_metadata(self, map_name):
-        """Membaca dan menyimpan resolusi dan origin dari file .yaml peta."""
         try:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
             map_yaml_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
@@ -170,15 +178,15 @@ class RosManager:
             print(f"ERROR: Gagal memuat metadata peta '{map_name}': {e}")
             self.map_metadata = None
 
+    # ===== FUNGSI DIPERBAIKI =====
     def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
-        """Mengonversi koordinat piksel dan mengirimkannya sebagai goal."""
         if not self.map_metadata:
             print("ERROR: Metadata peta belum dimuat. Tidak bisa mengirim goal.")
             return
 
         if self.goal_publisher is None:
-            self.goal_publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
-            rospy.sleep(0.5)
+            print("ERROR: Goal publisher belum siap. Coba lagi sebentar.")
+            return
 
         resolution = self.map_metadata['resolution']
         origin_x = self.map_metadata['origin'][0]
