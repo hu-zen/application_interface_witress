@@ -1,4 +1,4 @@
-# File: manager.py (Versi dengan Mode Controller, Mapping, & Navigasi Tahap 1)
+# File: manager.py (Versi dengan Mode Controller, Mapping, & Navigasi)
 
 import subprocess
 import time
@@ -27,7 +27,6 @@ class RosManager:
         print("INFO: RosManager siap.")
 
     def start_roscore(self):
-        # (Fungsi ini tidak berubah)
         try:
             subprocess.check_output(["pidof", "roscore"])
             print("INFO: roscore sudah berjalan.")
@@ -41,7 +40,6 @@ class RosManager:
                 print(f"FATAL: Gagal memulai roscore: {e}")
 
     def _stop_process_group(self, process, name):
-        # (Fungsi ini tidak berubah)
         if process and process.poll() is None:
             try:
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
@@ -51,7 +49,7 @@ class RosManager:
                 print(f"WARN: Gagal menghentikan '{name}' dengan normal.")
         return None
 
-    # --- FUNGSI-FUNGSI MODE (Controller & Mapping tidak berubah) ---
+    # --- FUNGSI-FUNGSI MODE LAMA (Tidak Berubah) ---
     def start_controller(self):
         if not self.is_controller_running:
             command = "roslaunch my_robot_pkg controller.launch"
@@ -104,7 +102,6 @@ class RosManager:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
             maps_dir = os.path.join(pkg_path, 'maps')
             map_files = glob.glob(os.path.join(maps_dir, '*.yaml'))
-            # Ambil nama filenya saja tanpa ekstensi
             map_names = [os.path.splitext(os.path.basename(f))[0] for f in map_files]
             print(f"INFO: Peta yang ditemukan: {map_names}")
             return map_names
