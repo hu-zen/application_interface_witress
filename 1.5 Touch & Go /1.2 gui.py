@@ -14,27 +14,6 @@ import yaml
 
 from manager import RosManager
 
-# ==================================================================
-# =================== AREA KALIBRASI MANUAL ========================
-# ==================================================================
-# Ikuti instruksi di bawah untuk mendapatkan nilai-nilai ini.
-
-# Nilai Offset (Pergeseran)
-# Sesuaikan nilai ini untuk memastikan titik (0,0) di pojok kiri atas peta
-# cocok dengan klik mouse Anda di sana.
-# - Tambah OFFSET_X jika 'X' terlalu ke kiri dari klik Anda.
-# - Tambah OFFSET_Y jika 'X' terlalu ke bawah dari klik Anda.
-MANUAL_OFFSET_X = 25
-MANUAL_OFFSET_Y = 22
-
-# Nilai Skala
-# Sesuaikan nilai ini untuk memastikan jangkauan klik sesuai dengan ukuran peta.
-# - Jika 'X' tidak mencapai ujung kanan peta saat Anda klik, PERKECIL SCALE_X.
-# - Jika 'X' tidak mencapai ujung bawah peta saat Anda klik, PERKECIL SCALE_Y.
-MANUAL_SCALE_X = 0.94
-MANUAL_SCALE_Y = 0.92
-# ==================================================================
-
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -54,8 +33,11 @@ class NavSelectionScreen(Screen):
 
 class MapImage(TouchRippleBehavior, Image):
     def on_touch_down(self, touch):
+        # Periksa apakah sentuhan terjadi di dalam batas widget itu sendiri
         if self.collide_point(*touch.pos):
+            # Teruskan event ke fungsi logika utama di MainApp
             App.get_running_app().on_map_touch(touch, self)
+            # Izinkan event sentuhan untuk melanjutkan (misalnya untuk efek ripple)
             return super().on_touch_down(touch)
 
 class NavigationScreen(Screen):
@@ -67,6 +49,8 @@ class NavigationScreen(Screen):
         self.ids.navigate_button.disabled = True
         self.ids.marker_layout.clear_widgets()
         self.selected_pixel_coords = None
+        self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
+
 
     def load_map_image(self, map_name):
         if map_name:
@@ -81,7 +65,6 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # Desain KV tidak berubah dari versi sebelumnya
         kv_design = """
 <NavSelectionScreen>:
     BoxLayout:
@@ -228,39 +211,66 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
+    # ===== FUNGSI INI DIROMBAK TOTAL UNTUK AKURASI =====
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
+
+        # Pastikan gambar sudah dimuat
+        if not image_widget.texture:
+            return
+
+        # 1. Hitung skala dan offset gambar yang sebenarnya ditampilkan
+        widget_w, widget_h = image_widget.size
+        norm_w, norm_h = image_widget.texture.size
+
+        if norm_w == 0 or norm_h == 0: return
+
+        # Hitung rasio aspek untuk menentukan adanya area kosong (letterboxing)
+        widget_ratio = widget_w / widget_h if widget_h > 0 else 0
+        image_ratio = norm_w / norm_h if norm_h > 0 else 0
         
-        if not image_widget.texture: return
+        if image_ratio == 0: return
 
-        # 1. Hitung Posisi Sentuhan yang Sudah Dikalibrasi
-        # Dapatkan posisi sentuhan relatif terhadap widget gambar
-        touch_x_rel_widget = touch.x - image_widget.x
-        touch_y_rel_widget = touch.y - image_widget.y
-
-        # Cetak koordinat mentah untuk membantu proses kalibrasi Anda
-        print(f"--- INFO KALIBRASI ---")
-        print(f"Klik Mouse Mentah (relatif thd widget): X={touch_x_rel_widget:.2f}, Y={touch_y_rel_widget:.2f}")
-        print(f"Ukuran Widget Gambar: W={image_widget.width:.2f}, H={image_widget.height:.2f}")
-        print(f"----------------------")
-
-        # Terapkan kalibrasi manual
-        calibrated_x = (touch_x_rel_widget - MANUAL_OFFSET_X) / MANUAL_SCALE_X
-        calibrated_y = (touch_y_rel_widget - MANUAL_OFFSET_Y) / MANUAL_SCALE_Y
+        if widget_ratio > image_ratio:
+            # Area kosong di kiri/kanan
+            scale = widget_h / norm_h
+            displayed_w = norm_w * scale
+            offset_x = (widget_w - displayed_w) / 2.0
+            offset_y = 0.0
+        else:
+            # Area kosong di atas/bawah
+            scale = widget_w / norm_w
+            displayed_h = norm_h * scale
+            offset_x = 0.0
+            offset_y = (widget_h - displayed_h) / 2.0
         
-        # 2. Tempatkan 'X' secara visual tepat di posisi sentuhan
+        # 2. Periksa apakah sentuhan berada di dalam area gambar (bukan di area kosong)
+        touch_local_x = touch.x - image_widget.x
+        touch_local_y = touch.y - image_widget.y
+        
+        if not (offset_x <= touch_local_x < offset_x + displayed_w and
+                offset_y <= touch_local_y < offset_y + displayed_h):
+            print("INFO: Sentuhan di luar area peta.")
+            return
+
+        # 3. Tempatkan 'X' secara visual tepat di posisi sentuhan global
         marker_layout.clear_widgets()
-        local_pos_for_marker = marker_layout.to_local(*touch.pos)
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        marker.center = local_pos_for_marker
+        # Gunakan `touch.pos` (koordinat global) yang dikonversi ke sistem koordinat `marker_layout`
+        marker.center = marker_layout.to_local(*touch.pos)
         marker_layout.add_widget(marker)
         
-        # 3. Simpan koordinat yang sudah dikalibrasi untuk dikirim ke ROS
-        norm_w, norm_h = image_widget.texture.size
-        screen.selected_pixel_coords = (calibrated_x, calibrated_y, norm_w, norm_h)
+        # 4. Hitung koordinat piksel yang akurat untuk dikirim ke ROS
+        touch_on_image_x = touch_local_x - offset_x
+        touch_on_image_y = touch_local_y - offset_y
+
+        pixel_x_for_ros = touch_on_image_x / scale
+        pixel_y_for_ros = touch_on_image_y / scale
         
-        # 4. Aktifkan UI
+        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
+        
+        # 5. Aktifkan UI
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
