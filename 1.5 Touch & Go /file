@@ -1,60 +1,43 @@
-# ... (kode lain di dalam kelas MainApp) ...
-
-    # ===== PERBAIKAN FINAL: Logika Akurat untuk Posisi Penanda 'X' =====
-    def on_map_touch(self, touch, image_widget):
-        screen = self.root.get_screen('navigation')
-        marker_layout = screen.ids.marker_layout
-
-        # 1. Dapatkan posisi dan ukuran gambar yang sebenarnya ditampilkan di layar.
-        #    image_widget.norm_image_size -> ukuran asli gambar (misal: 1024x1024)
-        #    image_widget.size -> ukuran widget di layar (misal: 800x600)
-        #    Kivy secara internal menghitung area gambar yang ditampilkan (tanpa area kosong).
-        #    Kita bisa dapatkan ini dari properti `_coreimage`.
-        
-        # Cek jika gambar sudah dimuat
-        if not image_widget.texture:
-            return
-
-        # Dapatkan posisi sentuhan relatif terhadap widget gambar
-        local_x = touch.x - image_widget.x
-        local_y = touch.y - image_widget.y
-
-        # Dapatkan ukuran gambar yang sebenarnya ditampilkan
-        disp_w, disp_h = image_widget.get_norm_image_size()
-
-        # Dapatkan offset (area kosong/letterboxing)
-        offset_x = (image_widget.width - disp_w) / 2.0
-        offset_y = (image_widget.height - disp_h) / 2.0
-        
-        # 2. Periksa apakah sentuhan berada di dalam area gambar
-        if not (offset_x <= local_x < offset_x + disp_w and
-                offset_y <= local_y < offset_y + disp_h):
-            print("INFO: Sentuhan di luar area peta.")
-            return
-
-        # 3. Tempatkan 'X' secara visual di posisi sentuhan
-        marker_layout.clear_widgets()
-        local_pos_for_marker = marker_layout.to_local(*touch.pos)
-        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        marker.center = local_pos_for_marker
-        marker_layout.add_widget(marker)
-        
-        # 4. Hitung koordinat piksel yang akurat untuk ROS
-        # Dapatkan posisi sentuhan di dalam gambar yang ditampilkan (tanpa offset)
-        touch_on_image_x = local_x - offset_x
-        touch_on_image_y = local_y - offset_y
-
-        # Dapatkan resolusi asli gambar dari texture
-        norm_w, norm_h = image_widget.texture.size
-        
-        # Skalakan koordinat sentuhan dari ukuran tampil ke ukuran asli
-        pixel_x_for_ros = (touch_on_image_x / disp_w) * norm_w
-        pixel_y_for_ros = (touch_on_image_y / disp_h) * norm_h
-        
-        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
-        
-        # 5. Aktifkan UI
-        screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
-
-# ... (sisa kode MainApp tidak berubah) ...
+ Traceback (most recent call last):
+   File "gui.py", line 339, in <module>
+     MainApp().run()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
+     runTouchApp()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 574, in runTouchApp
+     EventLoop.mainloop()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 339, in mainloop
+     self.idle()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 383, in idle
+     self.dispatch_input()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 334, in dispatch_input
+     post_dispatch_input(*pop(0))
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 263, in post_dispatch_input
+     listener.dispatch('on_motion', etype, me)
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/core/window/__init__.py", line 1691, in on_motion
+     self.dispatch('on_touch_down', me)
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/core/window/__init__.py", line 1708, in on_touch_down
+     if w.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/screenmanager.py", line 1210, in on_touch_down
+     return super(ScreenManager, self).on_touch_down(touch)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/relativelayout.py", line 306, in on_touch_down
+     ret = super(RelativeLayout, self).on_touch_down(touch)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "gui.py", line 39, in on_touch_down
+     App.get_running_app().on_map_touch(touch, self)
+   File "gui.py", line 253, in on_map_touch
+     offset_y <= touch_local_y < offset_y + displayed_h):
+ UnboundLocalError: local variable 'displayed_h' referenced before assignment
