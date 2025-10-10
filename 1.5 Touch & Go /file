@@ -1,5 +1,8 @@
+[ INFO] [1760061088.620480684]: No devices connected.... waiting for devices to be connected
+INFO: Sentuhan di (437.00000000000006, 306.0) -> Dikonversi ke Goal ROS (11.85, 0.20)
+[INFO   ] [Base        ] Leaving application in progress...
  Traceback (most recent call last):
-   File "gui.py", line 269, in <module>
+   File "gui.py", line 283, in <module>
      MainApp().run()
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/app.py", line 956, in run
      runTouchApp()
@@ -7,16 +10,50 @@
      EventLoop.mainloop()
    File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 339, in mainloop
      self.idle()
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 379, in idle
-     Clock.tick()
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 733, in tick
-     self.post_idle(ts, self.idle())
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 689, in idle
-     usleep(1000000 * sleeptime)
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 965, in usleep
-     _usleep(microseconds, self._sleep_obj)
-   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/clock.py", line 556, in _usleep
-     _libc_usleep(int(microseconds))
- KeyboardInterrupt
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 383, in idle
+     self.dispatch_input()
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 334, in dispatch_input
+     post_dispatch_input(*pop(0))
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/base.py", line 263, in post_dispatch_input
+     listener.dispatch('on_motion', etype, me)
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/core/window/__init__.py", line 1691, in on_motion
+     self.dispatch('on_touch_down', me)
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/core/window/__init__.py", line 1708, in on_touch_down
+     if w.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/screenmanager.py", line 1210, in on_touch_down
+     return super(ScreenManager, self).on_touch_down(touch)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/relativelayout.py", line 306, in on_touch_down
+     ret = super(RelativeLayout, self).on_touch_down(touch)
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/widget.py", line 589, in on_touch_down
+     if child.dispatch('on_touch_down', touch):
+   File "kivy/_event.pyx", line 731, in kivy._event.EventDispatcher.dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/uix/behaviors/button.py", line 151, in on_touch_down
+     self.dispatch('on_press')
+   File "kivy/_event.pyx", line 727, in kivy._event.EventDispatcher.dispatch
+   File "kivy/_event.pyx", line 1307, in kivy._event.EventObservers.dispatch
+   File "kivy/_event.pyx", line 1191, in kivy._event.EventObservers._dispatch
+   File "/home/iascr/.local/lib/python3.8/site-packages/kivy/lang/builder.py", line 55, in custom_callback
+     exec(__kvlang__.co_value, idmap)
+   File "<string>", line 54, in <module>
+   File "gui.py", line 225, in confirm_navigation_goal
+     self.manager.send_goal_from_pixel(px, py, w, h)
+   File "/home/iascr/catkin_ws/src/waiterbot_interface/scripts/manager.py", line 203, in send_goal_from_pixel
+     goal_msg.header.stamp = rospy.Time.now()
+   File "/opt/ros/noetic/lib/python3/dist-packages/rospy/rostime.py", line 155, in now
+     return get_rostime()
+   File "/opt/ros/noetic/lib/python3/dist-packages/rospy/rostime.py", line 190, in get_rostime
+     raise rospy.exceptions.ROSInitException("time is not initialized. Have you called init_node()?")
+ rospy.exceptions.ROSInitException: time is not initialized. Have you called init_node()?
 [INFO   ] signal_shutdown [atexit]
-
