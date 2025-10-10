@@ -61,8 +61,6 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-#<-- KODE KV UNTUK LAYAR LAIN TETAP SAMA -->
-
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -208,28 +206,30 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ===== PERBAIKAN: Logika baru untuk posisi penanda 'X' =====
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
         
         marker_layout.clear_widgets()
 
-        # Konversi koordinat sentuhan (window) ke koordinat lokal di dalam marker_layout
         local_pos = marker_layout.to_local(*touch.pos)
         
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        
-        # Gunakan 'center' untuk penempatan yang lebih akurat
         marker.center_x = local_pos[0]
         marker.center_y = local_pos[1]
         
         marker_layout.add_widget(marker)
+        
+        # Perhitungan untuk ROS menggunakan ukuran gambar yang sebenarnya (norm_image_size)
+        # dan posisi sentuhan relatif terhadap widget gambar
+        img_x, img_y = image_widget.pos
+        img_w, img_h = image_widget.norm_image_size # Ukuran gambar asli di dalam widget
 
-        # Logika untuk konversi ke koordinat ROS tetap sama
-        local_x_for_ros = touch.x - image_widget.x
-        local_y_for_ros = touch.y - image_widget.y
-        screen.selected_pixel_coords = (local_x_for_ros, local_y_for_ros, image_widget.norm_image_size[0], image_widget.norm_image_size[1])
+        # Hitung posisi sentuhan relatif terhadap sudut kiri bawah gambar di dalam widget
+        touch_x_rel = touch.x - img_x
+        touch_y_rel = touch.y - img_y
+
+        screen.selected_pixel_coords = (touch_x_rel, touch_y_rel, img_w, img_h)
         
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
