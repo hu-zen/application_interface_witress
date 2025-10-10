@@ -14,21 +14,6 @@ import yaml
 
 from manager import RosManager
 
-# ==================================================================
-# =================== AREA KALIBRASI MANUAL ========================
-# ==================================================================
-# CARA MENGISI:
-# 1. Jalankan aplikasi, masuk ke mode navigasi.
-# 2. Klik TEPAT di pojok KIRI ATAS dari gambar peta yang ditampilkan.
-# 3. Lihat terminal, salin angka (X, Y) dari "Koordinat Klik Mentah" ke bawah ini.
-KALIBRASI_LAYAR_KIRI_ATAS = (135, 550) # CONTOH: Ganti dengan (X, Y) dari terminal Anda
-
-# 4. Klik TEPAT di pojok KANAN BAWAH dari gambar peta.
-# 5. Lihat terminal, salin angka (X, Y) dari "Koordinat Klik Mentah" ke bawah ini.
-KALIBRASI_LAYAR_KANAN_BAWAH = (665, 30) # CONTOH: Ganti dengan (X, Y) dari terminal Anda
-# ==================================================================
-
-
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -54,15 +39,12 @@ class MapImage(TouchRippleBehavior, Image):
 
 class NavigationScreen(Screen):
     selected_pixel_coords = None
-
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         self.ids.marker_layout.clear_widgets()
         self.selected_pixel_coords = None
-        self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
-
     def load_map_image(self, map_name):
         if map_name:
             app = App.get_running_app()
@@ -77,8 +59,6 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-#<-- Desain KV di sini tidak berubah, jadi saya persingkat -->
-#<-- Anda tidak perlu mengubah bagian ini dari file Anda -->
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -101,7 +81,6 @@ class MainApp(App):
             on_press: root.manager.current = 'main_menu'
 
 <NavigationScreen>:
-    name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
@@ -224,78 +203,80 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ===== PERBAIKAN FINAL ADA DI SINI =====
+    # ===== PERUBAHAN UTAMA ADA DI FUNGSI INI =====
     def on_map_touch(self, touch, image_widget):
+        """Menangani sentuhan pada peta dan mengonversi koordinat dengan akurat."""
         screen = self.root.get_screen('navigation')
+        
+        # Dapatkan ukuran gambar asli dari texture-nya
+        if not image_widget.texture: return
+        image_w, image_h = image_widget.texture.size
+        
+        # Dapatkan ukuran widget yang menampilkannya
+        widget_w, widget_h = image_widget.size
+        
+        if image_w == 0 or image_h == 0: return
+
+        # Hitung skala dan offset karena 'keep_ratio: True'
+        scale = min(widget_w / image_w, widget_h / image_h)
+        displayed_w = image_w * scale
+        displayed_h = image_h * scale
+        offset_x = (widget_w - displayed_w) / 2
+        offset_y = (widget_h - displayed_h) / 2
+        
+        # Ubah sentuhan menjadi koordinat lokal relatif terhadap widget gambar
+        touch_on_widget_x = touch.x - image_widget.x
+        touch_on_widget_y = touch.y - image_widget.y
+        
+        # Pastikan sentuhan berada di dalam area gambar yang ditampilkan, bukan di area kosong
+        if not (offset_x <= touch_on_widget_x < offset_x + displayed_w and
+                offset_y <= touch_on_widget_y < offset_y + displayed_h):
+            print("INFO: Sentuhan di luar area peta.")
+            return
+            
+        # --- Kalkulasi Koordinat Piksel untuk ROS ---
+        # 1. Dapatkan posisi sentuhan relatif terhadap gambar yang ditampilkan (bukan widget)
+        touch_on_image_x = touch_on_widget_x - offset_x
+        touch_on_image_y = touch_on_widget_y - offset_y
+        
+        # 2. Konversi dari koordinat gambar yang diskalakan ke koordinat piksel gambar asli
+        pixel_x_for_ros = touch_on_image_x / scale
+        pixel_y_for_ros = touch_on_image_y / scale
+        
+        # Simpan koordinat piksel untuk dikirim saat tombol konfirmasi ditekan
+        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, image_w, image_h)
+        
+        # --- Tampilkan Penanda (Marker) 'X' ---
         marker_layout = screen.ids.marker_layout
-
-        # Mencetak koordinat mentah untuk membantu Anda melakukan kalibrasi
-        print(f"Koordinat Klik Mentah: {touch.pos}")
-
-        # 1. Tempatkan 'X' secara visual tepat di posisi sentuhan
         marker_layout.clear_widgets()
-        # `touch.pos` adalah koordinat global window, kita konversi ke lokal layout penanda
-        local_pos_for_marker = marker_layout.to_local(*touch.pos)
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        # Gunakan 'center' untuk menempatkan 'X' tepat di posisi kursor
-        marker.center = local_pos_for_marker
+        # Posisikan marker TEPAT di titik sentuhan cursor Anda
+        marker.center = touch.pos
         marker_layout.add_widget(marker)
         
-        # 2. Hitung koordinat piksel untuk ROS berdasarkan kalibrasi manual
-        if not image_widget.texture: return
-        norm_w, norm_h = image_widget.texture.size
-        
-        calib_x1, calib_y1 = KALIBRASI_LAYAR_KIRI_ATAS
-        calib_x2, calib_y2 = KALIBRASI_LAYAR_KANAN_BAWAH
-        calib_width = calib_x2 - calib_x1
-        calib_height = calib_y1 - calib_y2
-
-        if calib_width <= 0 or calib_height <= 0:
-            print("Peringatan: Nilai Kalibrasi belum diatur dengan benar!")
-            # Nonaktifkan tombol navigasi jika kalibrasi salah
-            screen.ids.navigate_button.disabled = True
-            screen.ids.navigation_status_label.text = "Status: Kalibrasi salah! Periksa nilai di kode."
-            return
-
-        # Posisi sentuhan relatif terhadap pojok kiri atas area kalibrasi
-        relative_touch_x = touch.x - calib_x1
-        relative_touch_y = calib_y1 - touch.y  # Sumbu Y Kivy terbalik
-
-        # Lakukan pemetaan linear (interpolasi) untuk mendapatkan piksel di gambar asli
-        pixel_x_for_ros = (relative_touch_x / calib_width) * norm_w
-        pixel_y_for_ros = (relative_touch_y / calib_height) * norm_h
-        
-        # Simpan hasil untuk dikirim ke manager.py
-        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
-        
-        # 3. Aktifkan UI
+        # Aktifkan tombol navigasi
         screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
+        screen.ids.navigation_status_label.text = "Titik dipilih. Tekan 'Lakukan Navigasi'."
+    # ==================================================
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
         if screen.selected_pixel_coords:
             px, py, w, h = screen.selected_pixel_coords
             self.manager.send_goal_from_pixel(px, py, w, h)
+            
             screen.ids.navigate_button.disabled = True
             screen.ids.marker_layout.clear_widgets()
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # ... Sisa fungsi (go_to_controller_mode, dll.) tidak berubah ...
     def go_to_controller_mode(self):
-        status = self.manager.start_controller()
-        self.update_status_label('controller', 'controller_status_label', status)
-        self.root.current = 'controller'
+        status = self.manager.start_controller(); self.update_status_label('controller', 'controller_status_label', status); self.root.current = 'controller'
     def exit_controller_mode(self):
-        self.manager.stop_controller()
-        self.root.current = 'main_menu'
+        self.manager.stop_controller(); self.root.current = 'main_menu'
     def go_to_mapping_mode(self, map_name):
-        if not map_name.strip():
-            self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
-            return
-        status = self.manager.start_mapping(map_name)
-        self.root.current = 'mapping'
+        if not map_name.strip(): self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA KOSONG!'; return
+        status = self.manager.start_mapping(map_name); self.root.current = 'mapping'
         Clock.schedule_once(lambda dt: self.update_mapping_labels(status, map_name), 0.1)
     def update_mapping_labels(self, status, map_name):
         screen = self.root.get_screen('mapping')
@@ -305,14 +286,11 @@ ScreenManager:
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\nMohon tunggu.')
         Clock.schedule_once(self._finish_exit_mapping, 1)
     def _finish_exit_mapping(self, dt):
-        self.manager.stop_mapping()
-        self.root.current = 'main_menu'
+        self.manager.stop_mapping(); self.root.current = 'main_menu'
     def start_navigation_with_map(self, map_name, *args):
-        self.manager.start_navigation(map_name)
-        self.root.current = 'navigation'
+        self.manager.start_navigation(map_name); self.root.current = 'navigation'
     def exit_navigation_mode(self):
-        self.manager.stop_navigation()
-        self.root.current = 'main_menu'
+        self.manager.stop_navigation(); self.root.current = 'main_menu'
     def on_stop(self):
         self.manager.shutdown()
     @mainthread
@@ -322,8 +300,7 @@ ScreenManager:
                 screen = self.root.get_screen(screen_name)
                 if screen and label_id in screen.ids:
                     screen.ids[label_id].text = new_text
-            except Exception as e:
-                print(f"Gagal update GUI: {e}")
+            except Exception as e: print(f"Gagal update GUI: {e}")
 
 if __name__ == '__main__':
     MainApp().run()
