@@ -206,34 +206,41 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
+    # ===== PERBAIKAN FINAL ADA DI FUNGSI INI =====
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
-        
+
+        # 1. Dapatkan ukuran dan posisi gambar yang sebenarnya ditampilkan di layar.
         widget_w, widget_h = image_widget.size
-        norm_w, norm_h = image_widget.norm_image_size
-
-        if norm_w == 0 or norm_h == 0:
+        
+        # Cek jika gambar sudah dimuat (texture ada)
+        if not image_widget.texture:
             return
+        norm_w, norm_h = image_widget.texture.size
 
-        widget_ratio = widget_w / widget_h
-        image_ratio = norm_w / norm_h
+        # Hitung rasio aspek untuk menentukan adanya area kosong (letterboxing)
+        widget_ratio = widget_w / widget_h if widget_h > 0 else 0
+        image_ratio = norm_w / norm_h if norm_h > 0 else 0
 
-        # ===== PERBAIKAN UTAMA ADA DI SINI =====
+        if image_ratio == 0: return
+
         if widget_ratio > image_ratio:
+            # Widget lebih lebar dari gambar -> area kosong di kiri/kanan
             scale = widget_h / norm_h
             displayed_w = norm_w * scale
-            displayed_h = widget_h # Tinggi gambar mengisi penuh widget
-            offset_x = (widget_w - displayed_w) / 2
-            offset_y = 0
+            displayed_h = widget_h
+            offset_x = (widget_w - displayed_w) / 2.0
+            offset_y = 0.0
         else:
+            # Widget lebih tinggi dari gambar -> area kosong di atas/bawah
             scale = widget_w / norm_w
-            displayed_w = widget_w # Lebar gambar mengisi penuh widget
+            displayed_w = widget_w
             displayed_h = norm_h * scale
-            offset_x = 0
-            offset_y = (widget_h - displayed_h) / 2
-        # =======================================
-
+            offset_x = 0.0
+            offset_y = (widget_h - displayed_h) / 2.0
+        
+        # 2. Periksa apakah sentuhan berada di dalam area gambar (bukan di area kosong)
         touch_local_x = touch.x - image_widget.x
         touch_local_y = touch.y - image_widget.y
         
@@ -242,12 +249,15 @@ ScreenManager:
             print("INFO: Sentuhan di luar area peta.")
             return
 
+        # 3. Tempatkan 'X' secara visual tepat di posisi sentuhan
         marker_layout.clear_widgets()
+        # Gunakan koordinat global sentuhan untuk menempatkan penanda di layout overly
         local_pos_for_marker = marker_layout.to_local(*touch.pos)
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
         marker.center = local_pos_for_marker
         marker_layout.add_widget(marker)
         
+        # 4. Hitung koordinat piksel yang akurat untuk dikirim ke ROS
         touch_on_image_x = touch_local_x - offset_x
         touch_on_image_y = touch_local_y - offset_y
 
@@ -256,6 +266,7 @@ ScreenManager:
         
         screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
         
+        # 5. Aktifkan UI
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
