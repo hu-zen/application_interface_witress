@@ -7,6 +7,10 @@ import signal
 import rospkg
 import glob
 import yaml
+# Hapus import rospy karena kita tidak akan menggunakannya secara langsung di sini lagi
+# import rospy 
+# from geometry_msgs.msg import PoseStamped
+# from tf.transformations import quaternion_from_euler
 
 class RosManager:
     def __init__(self, status_callback):
@@ -24,6 +28,7 @@ class RosManager:
         
         self.current_map_name = None
         self.map_metadata = None
+        # Hapus goal_publisher dari init
         
         self.start_roscore()
         print("INFO: RosManager siap.")
@@ -53,24 +58,16 @@ class RosManager:
 
     def start_controller(self):
         if not self.is_controller_running:
-            # Pastikan nama paket dan file launch sudah benar
             command = "roslaunch my_robot_pkg controller.launch"
-            try:
-                self.controller_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-                self.is_controller_running = True
-                print("INFO: Mode Controller dimulai.")
-                return "Status: AKTIF"
-            except Exception as e:
-                print(f"FATAL: Gagal memulai controller: {e}")
-                return f"Gagal memulai controller: {e}"
+            self.controller_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.is_controller_running = True
+            print("INFO: Mode Controller dimulai."); return "Status: AKTIF"
         return "Status: Sudah Aktif"
-
 
     def stop_controller(self):
         if self.is_controller_running:
             self.controller_process = self._stop_process_group(self.controller_process, "Controller")
             self.is_controller_running = False
-            print("INFO: Mode Controller dihentikan.")
         return "Status: DIMATIKAN"
 
     def start_mapping(self, map_name):
@@ -130,7 +127,6 @@ class RosManager:
                 
                 self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
                 self.is_navigation_running = True
-                # Pastikan controller juga aktif saat navigasi
                 self.start_controller()
                 
                 print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
@@ -165,13 +161,13 @@ class RosManager:
             map_yaml_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
             with open(map_yaml_path, 'r') as f:
                 self.map_metadata = yaml.safe_load(f)
-                print(f"INFO: Metadata untuk peta '{map_name}' dimuat.")
+                print(f"INFO: Metadata untuk peta '{map_name}' dimuat: {self.map_metadata}")
         except Exception as e:
             print(f"ERROR: Gagal memuat metadata peta '{map_name}': {e}")
             self.map_metadata = None
 
+    # ===== PERBAIKAN UTAMA: Menggunakan `rostopic pub` =====
     def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
-        """Mengonversi koordinat piksel dan mengirimkannya sebagai goal via rostopic pub."""
         if not self.map_metadata:
             print("ERROR: Metadata peta belum dimuat. Tidak bisa mengirim goal.")
             return
@@ -186,6 +182,8 @@ class RosManager:
         
         print(f"INFO: Sentuhan di ({touch_x:.2f}, {touch_y:.2f}) -> Dikonversi ke Goal ROS ({map_x:.2f}, {map_y:.2f})")
 
+        # Membuat string pesan YAML untuk perintah rostopic
+        # Orientasi default (w=1) berarti tidak ada rotasi (menghadap ke depan)
         goal_msg_yaml = f"""header:
   stamp: now
   frame_id: "map"
@@ -200,10 +198,12 @@ pose:
     z: 0.0
     w: 1.0"""
 
+        # Membuat dan menjalankan perintah rostopic pub sebagai subprocess
+        # Argumen '-1' membuat perintah hanya dieksekusi sekali
         command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
         
         try:
-            # Menggunakan Popen agar tidak memblokir GUI sama sekali
+            print("INFO: Menjalankan perintah:", command)
             subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print("INFO: Perintah GOAL dikirim ke /move_base_simple/goal")
         except Exception as e:
@@ -212,8 +212,7 @@ pose:
     def shutdown(self):
         print("INFO: Shutdown dipanggil, menghentikan semua proses...")
         self.stop_mapping()
-        # Hentikan controller terakhir setelah semua mode lain berhenti
+        self.stop_controller()
         self.stop_navigation()
-        self.stop_controller() 
         if self.roscore_process:
             self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
