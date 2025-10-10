@@ -14,6 +14,15 @@ import yaml
 
 from manager import RosManager
 
+# ==================================================================
+# ============ AREA KALIBRASI VISUAL POSISI 'X' ==================
+# ==================================================================
+#
+#       TIDAK DIPERLUKAN LAGI! Kita akan menggunakan perhitungan dinamis.
+#
+# ==================================================================
+
+
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -36,6 +45,7 @@ class MapImage(TouchRippleBehavior, Image):
         if self.collide_point(*touch.pos):
             App.get_running_app().on_map_touch(touch, self)
             return super().on_touch_down(touch)
+        return False
 
 class NavigationScreen(Screen):
     selected_pixel_coords = None
@@ -62,7 +72,7 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-#<-- Desain KV di sini tidak berubah dari versi sebelumnya -->
+#<-- Desain KV di sini tidak berubah dari versi Anda yang berhasil -->
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -85,7 +95,6 @@ class MainApp(App):
             on_press: root.manager.current = 'main_menu'
 
 <NavigationScreen>:
-    name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
@@ -212,76 +221,70 @@ ScreenManager:
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
-
-        # Pastikan gambar sudah dimuat
-        if not image_widget.texture:
-            return
-
-        # 1. Hitung skala dan offset gambar yang sebenarnya ditampilkan
+        
+        # Dapatkan ukuran gambar asli dari texture-nya
+        if not image_widget.texture: return
+        image_w, image_h = image_widget.texture.size
+        
+        # Dapatkan ukuran widget yang menampilkannya
         widget_w, widget_h = image_widget.size
-        norm_w, norm_h = image_widget.texture.size
-
-        if norm_w == 0 or norm_h == 0: return
-
-        widget_ratio = widget_w / widget_h if widget_h > 0 else 0
-        image_ratio = norm_w / norm_h if norm_h > 0 else 0
         
-        if image_ratio == 0: return
+        if image_w == 0 or image_h == 0: return
 
-        # Logika ini sekarang lengkap dan memperbaiki bug UnboundLocalError
-        if widget_ratio > image_ratio:
-            scale = widget_h / norm_h
-            displayed_w = norm_w * scale
-            displayed_h = widget_h
-            offset_x = (widget_w - displayed_w) / 2.0
-            offset_y = 0.0
-        else:
-            scale = widget_w / norm_w
-            displayed_w = widget_w
-            displayed_h = norm_h * scale
-            offset_x = 0.0
-            offset_y = (widget_h - displayed_h) / 2.0
+        # Hitung skala dan offset secara dinamis karena 'keep_ratio: True'
+        scale = min(widget_w / image_w, widget_h / image_h)
+        displayed_w = image_w * scale
+        displayed_h = image_h * scale
+        offset_x = (widget_w - displayed_w) / 2
+        offset_y = (widget_h - displayed_h) / 2
         
-        # 2. Periksa apakah sentuhan berada di dalam area gambar (bukan di area kosong)
-        touch_local_x = touch.x - image_widget.x
-        touch_local_y = touch.y - image_widget.y
+        # Ubah sentuhan (koordinat global) menjadi koordinat lokal relatif terhadap WIDGET gambar
+        touch_on_widget_x = touch.x - image_widget.x
+        touch_on_widget_y = touch.y - image_widget.y
         
-        if not (offset_x <= touch_local_x < offset_x + displayed_w and
-                offset_y <= touch_local_y < offset_y + displayed_h):
+        # Pastikan sentuhan berada di dalam area gambar yang ditampilkan, bukan di area kosong
+        if not (offset_x <= touch_on_widget_x < offset_x + displayed_w and
+                offset_y <= touch_on_widget_y < offset_y + displayed_h):
             print("INFO: Sentuhan di luar area peta.")
             return
-
-        # 3. Tempatkan 'X' secara visual TEPAT di posisi sentuhan global
-        marker_layout.clear_widgets()
-        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        # Gunakan `touch.pos` (koordinat global window) yang dikonversi ke sistem koordinat `marker_layout`
-        marker.center = marker_layout.to_local(*touch.pos)
-        marker_layout.add_widget(marker)
+            
+        # --- Kalkulasi Koordinat Piksel untuk ROS ---
+        # 1. Dapatkan posisi sentuhan relatif terhadap GAMBAR yang ditampilkan (bukan widget)
+        touch_on_image_x = touch_on_widget_x - offset_x
+        touch_on_image_y = touch_on_widget_y - offset_y
         
-        # 4. Hitung koordinat piksel yang akurat untuk dikirim ke ROS
-        touch_on_image_x = touch_local_x - offset_x
-        touch_on_image_y = touch_local_y - offset_y
-
+        # 2. Konversi dari koordinat gambar yang diskalakan ke koordinat piksel gambar ASLI
         pixel_x_for_ros = touch_on_image_x / scale
         pixel_y_for_ros = touch_on_image_y / scale
         
-        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
+        # Simpan koordinat piksel untuk dikirim saat tombol konfirmasi ditekan
+        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, image_w, image_h)
         
-        # 5. Aktifkan UI
+        # --- Tampilkan Penanda (Marker) 'X' ---
+        marker_layout.clear_widgets()
+        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+        # Posisikan marker TEPAT di titik sentuhan cursor Anda secara global
+        marker.center_x = touch.x
+        marker.center_y = touch.y
+        marker_layout.add_widget(marker)
+        
+        # Aktifkan tombol navigasi
         screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
+        screen.ids.navigation_status_label.text = "Titik dipilih. Tekan 'Lakukan Navigasi'."
+    # =========================================================================================
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
         if screen.selected_pixel_coords:
             px, py, w, h = screen.selected_pixel_coords
             self.manager.send_goal_from_pixel(px, py, w, h)
+            
             screen.ids.navigate_button.disabled = True
             screen.ids.marker_layout.clear_widgets()
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # ... Sisa fungsi tidak berubah ...
+    # ... Sisa fungsi tidak berubah dari program Anda yang berhasil ...
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
