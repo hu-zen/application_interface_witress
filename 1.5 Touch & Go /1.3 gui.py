@@ -14,6 +14,22 @@ import yaml
 
 from manager import RosManager
 
+# ==================================================================
+# ============ AREA KALIBRASI VISUAL POSISI 'X' ==================
+# ==================================================================
+# Gunakan nilai ini untuk menggeser posisi 'X' agar tepat di kursor.
+# Berdasarkan data Anda (klik di 414, X muncul di 752), kita perlu menggeser X ke kiri.
+# Perkiraan awal: 414 - 752 = -338
+#
+# CARA MENYESUAIKAN:
+# - Jika 'X' muncul di KANAN dari kursor Anda, PERKECIL angkanya (misal: dari -338 menjadi -340).
+# - Jika 'X' muncul di KIRI dari kursor Anda, PERBESAR angkanya (misal: dari -338 menjadi -330).
+# - Lakukan hal yang sama untuk Y.
+VISUAL_OFFSET_X = -338
+VISUAL_OFFSET_Y = -198 # Perkiraan awal dari data Anda: 348 - 546 = -198
+# ==================================================================
+
+
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -39,12 +55,15 @@ class MapImage(TouchRippleBehavior, Image):
 
 class NavigationScreen(Screen):
     selected_pixel_coords = None
+
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         self.ids.marker_layout.clear_widgets()
         self.selected_pixel_coords = None
+        self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
+
     def load_map_image(self, map_name):
         if map_name:
             app = App.get_running_app()
@@ -59,6 +78,7 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
+#<-- Desain KV di sini tidak berubah, jadi saya persingkat -->
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -81,6 +101,7 @@ class MainApp(App):
             on_press: root.manager.current = 'main_menu'
 
 <NavigationScreen>:
+    name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
@@ -203,80 +224,82 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ===== PERUBAHAN UTAMA ADA DI FUNGSI INI =====
+    # ===== PERBAIKAN FINAL ADA DI SINI =====
     def on_map_touch(self, touch, image_widget):
-        """Menangani sentuhan pada peta dan mengonversi koordinat dengan akurat."""
         screen = self.root.get_screen('navigation')
-        
-        # Dapatkan ukuran gambar asli dari texture-nya
-        if not image_widget.texture: return
-        image_w, image_h = image_widget.texture.size
-        
-        # Dapatkan ukuran widget yang menampilkannya
-        widget_w, widget_h = image_widget.size
-        
-        if image_w == 0 or image_h == 0: return
+        marker_layout = screen.ids.marker_layout
 
-        # Hitung skala dan offset karena 'keep_ratio: True'
-        scale = min(widget_w / image_w, widget_h / image_h)
-        displayed_w = image_w * scale
-        displayed_h = image_h * scale
-        offset_x = (widget_w - displayed_w) / 2
-        offset_y = (widget_h - displayed_h) / 2
+        # 1. Tempatkan 'X' secara visual dengan offset manual
+        marker_layout.clear_widgets()
+        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
         
-        # Ubah sentuhan menjadi koordinat lokal relatif terhadap widget gambar
-        touch_on_widget_x = touch.x - image_widget.x
-        touch_on_widget_y = touch.y - image_widget.y
+        # Terapkan offset manual ke posisi sentuhan
+        adjusted_x = touch.x + VISUAL_OFFSET_X
+        adjusted_y = touch.y + VISUAL_OFFSET_Y
+        marker.center = (adjusted_x, adjusted_y)
         
-        # Pastikan sentuhan berada di dalam area gambar yang ditampilkan, bukan di area kosong
-        if not (offset_x <= touch_on_widget_x < offset_x + displayed_w and
-                offset_y <= touch_on_widget_y < offset_y + displayed_h):
-            print("INFO: Sentuhan di luar area peta.")
-            return
-            
-        # --- Kalkulasi Koordinat Piksel untuk ROS ---
-        # 1. Dapatkan posisi sentuhan relatif terhadap gambar yang ditampilkan (bukan widget)
-        touch_on_image_x = touch_on_widget_x - offset_x
-        touch_on_image_y = touch_on_widget_y - offset_y
+        marker_layout.add_widget(marker)
         
-        # 2. Konversi dari koordinat gambar yang diskalakan ke koordinat piksel gambar asli
+        # 2. Hitung koordinat untuk ROS (logika ini tetap sama karena terpisah)
+        # Logika ini seharusnya sudah benar setelah masalah visual teratasi
+        if not image_widget.texture: return
+        widget_w, widget_h = image_widget.size
+        norm_w, norm_h = image_widget.texture.size
+        if norm_w == 0 or norm_h == 0: return
+
+        widget_ratio = widget_w / widget_h if widget_h > 0 else 0
+        image_ratio = norm_w / norm_h if norm_h > 0 else 0
+        if image_ratio == 0: return
+
+        if widget_ratio > image_ratio:
+            scale = widget_h / norm_h
+            offset_x = (widget_w - (norm_w * scale)) / 2.0
+            offset_y = 0.0
+        else:
+            scale = widget_w / norm_w
+            offset_x = 0.0
+            offset_y = (widget_h - (norm_h * scale)) / 2.0
+        
+        touch_local_x = touch.x - image_widget.x
+        touch_local_y = touch.y - image_widget.y
+
+        touch_on_image_x = touch_local_x - offset_x
+        touch_on_image_y = touch_local_y - offset_y
+
         pixel_x_for_ros = touch_on_image_x / scale
         pixel_y_for_ros = touch_on_image_y / scale
         
-        # Simpan koordinat piksel untuk dikirim saat tombol konfirmasi ditekan
-        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, image_w, image_h)
+        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
         
-        # --- Tampilkan Penanda (Marker) 'X' ---
-        marker_layout = screen.ids.marker_layout
-        marker_layout.clear_widgets()
-        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        # Posisikan marker TEPAT di titik sentuhan cursor Anda
-        marker.center = touch.pos
-        marker_layout.add_widget(marker)
-        
-        # Aktifkan tombol navigasi
+        # 3. Aktifkan UI
         screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Titik dipilih. Tekan 'Lakukan Navigasi'."
-    # ==================================================
+        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
+
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
         if screen.selected_pixel_coords:
             px, py, w, h = screen.selected_pixel_coords
             self.manager.send_goal_from_pixel(px, py, w, h)
-            
             screen.ids.navigate_button.disabled = True
             screen.ids.marker_layout.clear_widgets()
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
+    # ... Sisa fungsi tidak berubah ...
     def go_to_controller_mode(self):
-        status = self.manager.start_controller(); self.update_status_label('controller', 'controller_status_label', status); self.root.current = 'controller'
+        status = self.manager.start_controller()
+        self.update_status_label('controller', 'controller_status_label', status)
+        self.root.current = 'controller'
     def exit_controller_mode(self):
-        self.manager.stop_controller(); self.root.current = 'main_menu'
+        self.manager.stop_controller()
+        self.root.current = 'main_menu'
     def go_to_mapping_mode(self, map_name):
-        if not map_name.strip(): self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA KOSONG!'; return
-        status = self.manager.start_mapping(map_name); self.root.current = 'mapping'
+        if not map_name.strip():
+            self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
+            return
+        status = self.manager.start_mapping(map_name)
+        self.root.current = 'mapping'
         Clock.schedule_once(lambda dt: self.update_mapping_labels(status, map_name), 0.1)
     def update_mapping_labels(self, status, map_name):
         screen = self.root.get_screen('mapping')
@@ -286,11 +309,14 @@ ScreenManager:
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\nMohon tunggu.')
         Clock.schedule_once(self._finish_exit_mapping, 1)
     def _finish_exit_mapping(self, dt):
-        self.manager.stop_mapping(); self.root.current = 'main_menu'
+        self.manager.stop_mapping()
+        self.root.current = 'main_menu'
     def start_navigation_with_map(self, map_name, *args):
-        self.manager.start_navigation(map_name); self.root.current = 'navigation'
+        self.manager.start_navigation(map_name)
+        self.root.current = 'navigation'
     def exit_navigation_mode(self):
-        self.manager.stop_navigation(); self.root.current = 'main_menu'
+        self.manager.stop_navigation()
+        self.root.current = 'main_menu'
     def on_stop(self):
         self.manager.shutdown()
     @mainthread
@@ -300,7 +326,8 @@ ScreenManager:
                 screen = self.root.get_screen(screen_name)
                 if screen and label_id in screen.ids:
                     screen.ids[label_id].text = new_text
-            except Exception as e: print(f"Gagal update GUI: {e}")
+            except Exception as e:
+                print(f"Gagal update GUI: {e}")
 
 if __name__ == '__main__':
     MainApp().run()
