@@ -17,8 +17,7 @@ from manager import RosManager
 # ==================================================================
 # =================== AREA KALIBRASI MANUAL ========================
 # ==================================================================
-# Ikuti instruksi di bawah di terminal untuk mendapatkan nilai-nilai ini.
-
+# CARA MENGISI:
 # 1. Jalankan aplikasi, masuk ke mode navigasi.
 # 2. Klik TEPAT di pojok KIRI ATAS dari gambar peta yang ditampilkan.
 # 3. Lihat terminal, salin angka (X, Y) dari "Koordinat Klik Mentah" ke bawah ini.
@@ -78,7 +77,7 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-#<-- Desain KV di sini tidak berubah dari versi sebelumnya -->
+#<-- Desain KV di sini tidak berubah, jadi saya persingkat -->
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -224,7 +223,7 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ===== PERBAIKAN FINAL ADA DI SINI =====
+    # ===== PERBAIKAN FINAL ADA DI FUNGSI INI =====
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
@@ -252,8 +251,6 @@ ScreenManager:
 
         if calib_width <= 0 or calib_height <= 0:
             print("Peringatan: Nilai Kalibrasi belum diatur dengan benar!")
-            # Nonaktifkan tombol navigasi jika kalibrasi salah
-            screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Kalibrasi salah! Periksa nilai di kode."
             return
 
@@ -265,7 +262,6 @@ ScreenManager:
         pixel_x_for_ros = (relative_touch_x / calib_width) * norm_w
         pixel_y_for_ros = (relative_touch_y / calib_height) * norm_h
         
-        # Simpan hasil untuk dikirim ke manager.py
         screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
         
         # 3. Aktifkan UI
