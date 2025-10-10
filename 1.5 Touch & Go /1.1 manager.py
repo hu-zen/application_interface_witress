@@ -7,9 +7,10 @@ import signal
 import rospkg
 import glob
 import yaml
-import rospy
-from geometry_msgs.msg import PoseStamped
-from tf.transformations import quaternion_from_euler
+# Hapus import rospy karena kita tidak akan menggunakannya secara langsung di sini lagi
+# import rospy 
+# from geometry_msgs.msg import PoseStamped
+# from tf.transformations import quaternion_from_euler
 
 class RosManager:
     def __init__(self, status_callback):
@@ -27,7 +28,7 @@ class RosManager:
         
         self.current_map_name = None
         self.map_metadata = None
-        self.goal_publisher = None
+        # Hapus goal_publisher dari init
         
         self.start_roscore()
         print("INFO: RosManager siap.")
@@ -115,7 +116,6 @@ class RosManager:
             print(f"ERROR: Gagal mencari peta: {e}")
             return []
 
-    # ===== FUNGSI DIPERBAIKI =====
     def start_navigation(self, map_name):
         if not self.is_navigation_running:
             try:
@@ -128,12 +128,6 @@ class RosManager:
                 self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
                 self.is_navigation_running = True
                 self.start_controller()
-
-                # Inisialisasi publisher di sini, setelah node-node lain mungkin sudah mulai aktif
-                # Kita tidak perlu sleep karena Kivy akan memanggil ini sekali saja
-                print("INFO: Menginisialisasi goal publisher...")
-                self.goal_publisher = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
-                print("INFO: Goal publisher berhasil diinisialisasi.")
                 
                 print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
                 return f"Navigasi dengan peta\n'{map_name}' AKTIF"
@@ -147,14 +141,8 @@ class RosManager:
             self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
             self.is_navigation_running = False
             self.stop_controller()
-
-            # Reset variabel saat mode dihentikan
             self.current_map_name = None
             self.map_metadata = None
-            if self.goal_publisher:
-                self.goal_publisher.unregister()
-                print("INFO: Goal publisher di-unregister.")
-            self.goal_publisher = None
         return "Status: DIMATIKAN"
     
     def get_map_image_path(self, map_name):
@@ -178,14 +166,10 @@ class RosManager:
             print(f"ERROR: Gagal memuat metadata peta '{map_name}': {e}")
             self.map_metadata = None
 
-    # ===== FUNGSI DIPERBAIKI =====
+    # ===== PERBAIKAN UTAMA: Menggunakan `rostopic pub` =====
     def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
         if not self.map_metadata:
             print("ERROR: Metadata peta belum dimuat. Tidak bisa mengirim goal.")
-            return
-
-        if self.goal_publisher is None:
-            print("ERROR: Goal publisher belum siap. Coba lagi sebentar.")
             return
 
         resolution = self.map_metadata['resolution']
@@ -193,29 +177,38 @@ class RosManager:
         origin_y = self.map_metadata['origin'][1]
         
         pixel_y_reversed = image_height - touch_y
-
         map_x = (touch_x * resolution) + origin_x
         map_y = (pixel_y_reversed * resolution) + origin_y
         
-        print(f"INFO: Sentuhan di ({touch_x}, {touch_y}) -> Dikonversi ke Goal ROS ({map_x:.2f}, {map_y:.2f})")
+        print(f"INFO: Sentuhan di ({touch_x:.2f}, {touch_y:.2f}) -> Dikonversi ke Goal ROS ({map_x:.2f}, {map_y:.2f})")
 
-        goal_msg = PoseStamped()
-        goal_msg.header.stamp = rospy.Time.now()
-        goal_msg.header.frame_id = "map"
-        
-        goal_msg.pose.position.x = map_x
-        goal_msg.pose.position.y = map_y
-        goal_msg.pose.position.z = 0.0
-        
-        q = quaternion_from_euler(0, 0, 0)
-        goal_msg.pose.orientation.x = q[0]
-        goal_msg.pose.orientation.y = q[1]
-        goal_msg.pose.orientation.z = q[2]
-        goal_msg.pose.orientation.w = q[3]
+        # Membuat string pesan YAML untuk perintah rostopic
+        # Orientasi default (w=1) berarti tidak ada rotasi (menghadap ke depan)
+        goal_msg_yaml = f"""header:
+  stamp: now
+  frame_id: "map"
+pose:
+  position:
+    x: {map_x}
+    y: {map_y}
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    w: 1.0"""
 
-        self.goal_publisher.publish(goal_msg)
-        print("INFO: Perintah GOAL dikirim ke /move_base_simple/goal")
+        # Membuat dan menjalankan perintah rostopic pub sebagai subprocess
+        # Argumen '-1' membuat perintah hanya dieksekusi sekali
+        command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
         
+        try:
+            print("INFO: Menjalankan perintah:", command)
+            subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print("INFO: Perintah GOAL dikirim ke /move_base_simple/goal")
+        except Exception as e:
+            print(f"ERROR: Gagal mengirim perintah goal: {e}")
+
     def shutdown(self):
         print("INFO: Shutdown dipanggil, menghentikan semua proses...")
         self.stop_mapping()
