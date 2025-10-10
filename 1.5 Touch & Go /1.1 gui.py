@@ -8,8 +8,6 @@ from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.clock import mainthread, Clock
 from functools import partial
-
-# Tambahan untuk Fitur Baru
 from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior
 import yaml
@@ -18,21 +16,16 @@ from manager import RosManager
 
 class NavSelectionScreen(Screen):
     def on_enter(self):
-        """Metode ini dipanggil oleh Kivy secara otomatis setelah layar ini selesai dimuat."""
         self.update_map_list()
 
     def update_map_list(self):
-        """Mengisi layar dengan tombol-tombol peta."""
         grid = self.ids.nav_map_grid
         grid.clear_widgets()
-        
         app = App.get_running_app()
         map_names = app.manager.get_available_maps()
-        
         if not map_names:
             grid.add_widget(Label(text="Tidak ada peta ditemukan."))
             return
-            
         for name in map_names:
             btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
@@ -45,9 +38,17 @@ class MapImage(TouchRippleBehavior, Image):
             return super().on_touch_down(touch)
 
 class NavigationScreen(Screen):
+    # PERBAIKAN: Tambahkan variabel untuk menyimpan koordinat piksel yang dipilih
+    selected_pixel_coords = None
+
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
+        # PERBAIKAN: Pastikan tombol dan penanda bersih saat masuk layar
+        self.ids.navigate_button.disabled = True
+        self.ids.marker_layout.clear_widgets()
+        self.selected_pixel_coords = None
+
 
     def load_map_image(self, map_name):
         if map_name:
@@ -62,8 +63,9 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # String KV yang sudah diformat ulang dengan indentasi yang benar
         kv_design = """
+#<-- KODE KV UNTUK LAYAR LAIN TETAP SAMA -->
+
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -85,36 +87,61 @@ class MainApp(App):
             size_hint_y: 0.15
             on_press: root.manager.current = 'main_menu'
 
+# ===== PERBAIKAN: Desain Ulang Layar Navigasi =====
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
         spacing: 10
-        MapImage:
-            id: map_viewer
-            source: ''
-            allow_stretch: True
-            keep_ratio: False
+
+        # FloatLayout digunakan agar kita bisa menumpuk widget (peta dan penanda X)
+        FloatLayout:
+            id: map_container
+            
+            MapImage:
+                id: map_viewer
+                source: ''
+                allow_stretch: True
+                # Jaga rasio asli peta agar tidak distorsi
+                keep_ratio: True 
+                size_hint: 1, 1
+                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+
+            # Layout ini khusus untuk menampung penanda 'X'
+            FloatLayout:
+                id: marker_layout
+
         BoxLayout:
             size_hint_y: None
             height: '60dp'
             orientation: 'horizontal'
             spacing: 10
+            
             Label:
                 id: navigation_status_label
-                text: 'Status: Siap'
+                text: 'Status: Pilih titik di peta'
                 font_size: '18sp'
+            
+            # Tombol konfirmasi navigasi, awalnya nonaktif
+            Button:
+                id: navigate_button
+                text: 'Lakukan Navigasi'
+                font_size: '20sp'
+                disabled: True
+                on_press: app.confirm_navigation_goal()
+
             Button:
                 text: 'Stop & Kembali'
                 font_size: '20sp'
                 on_press: app.exit_navigation_mode()
 
+#<-- KODE KV UNTUK SCREEN MANAGER DAN LAYAR LAINNYA DI BAWAH INI -->
 ScreenManager:
     id: sm
-    
     Screen:
         name: 'main_menu'
+        # ... (isi layar main_menu tidak berubah)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -134,9 +161,9 @@ ScreenManager:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
                 on_press: sm.current = 'nav_selection'
-                
     Screen:
         name: 'pre_mapping'
+        # ... (isi layar pre_mapping tidak berubah)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -159,9 +186,9 @@ ScreenManager:
                 text: 'Kembali ke Menu'
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
-
     Screen:
         name: 'controller'
+        # ... (isi layar controller tidak berubah)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -174,9 +201,9 @@ ScreenManager:
                 text: 'Stop & Kembali ke Menu'
                 font_size: '22sp'
                 on_press: app.exit_controller_mode()
-                
     Screen:
         name: 'mapping'
+        # ... (isi layar mapping tidak berubah)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -194,26 +221,51 @@ ScreenManager:
                 text: 'Selesai Mapping & Simpan Otomatis'
                 font_size: '22sp'
                 on_press: app.exit_mapping_mode()
-
     NavSelectionScreen:
         name: 'nav_selection'
-
     NavigationScreen:
         name: 'navigation'
 """
         return Builder.load_string(kv_design)
 
+    # ===== PERBAIKAN: Logika baru untuk menangani sentuhan =====
     def on_map_touch(self, touch, image_widget):
+        # Dapatkan layar navigasi saat ini
+        screen = self.root.get_screen('navigation')
+
+        # Hapus penanda 'X' yang lama
+        screen.ids.marker_layout.clear_widgets()
+
+        # Buat penanda 'X' baru
+        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+        # Atur posisi penanda tepat di lokasi sentuhan
+        marker.pos = (touch.x - marker.width / 2, touch.y - marker.height / 2)
+        screen.ids.marker_layout.add_widget(marker)
+
+        # Simpan koordinat piksel sentuhan relatif terhadap gambar
         local_x = touch.x - image_widget.x
         local_y = touch.y - image_widget.y
+        screen.selected_pixel_coords = (local_x, local_y, image_widget.width, image_widget.height)
         
-        self.manager.send_goal_from_pixel(
-            local_x, 
-            local_y, 
-            image_widget.width, 
-            image_widget.height
-        )
+        # Aktifkan tombol navigasi
+        screen.ids.navigate_button.disabled = False
+        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
+    # ===== PERBAIKAN: Fungsi baru untuk tombol konfirmasi =====
+    def confirm_navigation_goal(self):
+        screen = self.root.get_screen('navigation')
+        if screen.selected_pixel_coords:
+            px, py, w, h = screen.selected_pixel_coords
+            
+            # Kirim perintah ke manager
+            self.manager.send_goal_from_pixel(px, py, w, h)
+            
+            # Reset setelah mengirim
+            screen.ids.navigate_button.disabled = True
+            screen.ids.marker_layout.clear_widgets()
+            screen.selected_pixel_coords = None
+            screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
+            
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -245,7 +297,7 @@ ScreenManager:
         self.root.current = 'main_menu'
 
     def start_navigation_with_map(self, map_name, *args):
-        status = self.manager.start_navigation(map_name)
+        self.manager.start_navigation(map_name)
         self.root.current = 'navigation'
         
     def exit_navigation_mode(self):
