@@ -15,14 +15,21 @@ import yaml
 from manager import RosManager
 
 class NavSelectionScreen(Screen):
-    def on_enter(self): self.update_map_list()
+    def on_enter(self):
+        self.update_map_list()
+
     def update_map_list(self):
-        grid = self.ids.nav_map_grid; grid.clear_widgets()
-        app = App.get_running_app(); map_names = app.manager.get_available_maps()
-        if not map_names: grid.add_widget(Label(text="Tidak ada peta ditemukan.")); return
+        grid = self.ids.nav_map_grid
+        grid.clear_widgets()
+        app = App.get_running_app()
+        map_names = app.manager.get_available_maps()
+        if not map_names:
+            grid.add_widget(Label(text="Tidak ada peta ditemukan."))
+            return
         for name in map_names:
             btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
-            btn.bind(on_press=partial(app.start_navigation_with_map, name)); grid.add_widget(btn)
+            btn.bind(on_press=partial(app.start_navigation_with_map, name))
+            grid.add_widget(btn)
 
 class MapImage(TouchRippleBehavior, Image):
     def on_touch_down(self, touch):
@@ -32,12 +39,29 @@ class MapImage(TouchRippleBehavior, Image):
 
 class NavigationScreen(Screen):
     selected_pixel_coords = None
+    # Variabel baru untuk proses kalibrasi
+    is_calibrating = False
+    calibration_step = 0
+    calib_point1 = None # Pojok kiri atas
+    calib_point2 = None # Pojok kanan bawah
+
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
+        self.reset_navigation_ui()
+
+    def reset_navigation_ui(self):
+        """Mereset UI navigasi ke kondisi awal."""
         self.ids.navigate_button.disabled = True
         self.ids.marker_layout.clear_widgets()
         self.selected_pixel_coords = None
+        self.is_calibrating = False
+        self.calibration_step = 0
+        self.calib_point1 = None
+        self.calib_point2 = None
+        self.ids.navigation_status_label.text = "Status: Lakukan kalibrasi atau pilih titik."
+
+
     def load_map_image(self, map_name):
         if map_name:
             app = App.get_running_app()
@@ -54,80 +78,146 @@ class MainApp(App):
         kv_design = """
 <NavSelectionScreen>:
     BoxLayout:
-        orientation: 'vertical'; padding: 20; spacing: 10
+        orientation: 'vertical'
+        padding: 20
+        spacing: 10
         Label:
-            text: 'Pilih Peta untuk Navigasi'; font_size: '24sp'; size_hint_y: 0.15
+            text: 'Pilih Peta untuk Navigasi'
+            font_size: '24sp'
+            size_hint_y: 0.15
         ScrollView:
             GridLayout:
-                id: nav_map_grid; cols: 1; size_hint_y: None; height: self.minimum_height; spacing: 10
+                id: nav_map_grid
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 10
         Button:
-            text: 'Kembali ke Menu'; size_hint_y: 0.15; on_press: root.manager.current = 'main_menu'
+            text: 'Kembali ke Menu'
+            size_hint_y: 0.15
+            on_press: root.manager.current = 'main_menu'
 
 <NavigationScreen>:
+    name: 'navigation'
     BoxLayout:
-        orientation: 'vertical'; padding: 10; spacing: 10
+        orientation: 'vertical'
+        padding: 10
+        spacing: 10
         FloatLayout:
             id: map_container
             MapImage:
-                id: map_viewer; source: ''; allow_stretch: True; keep_ratio: True 
-                size_hint: 1, 1; pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+                id: map_viewer
+                source: ''
+                allow_stretch: True
+                keep_ratio: True 
+                size_hint: 1, 1
+                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
             FloatLayout:
                 id: marker_layout
         BoxLayout:
-            size_hint_y: None; height: '60dp'; orientation: 'horizontal'; spacing: 10
+            size_hint_y: None
+            height: '60dp'
+            orientation: 'horizontal'
+            spacing: 10
             Label:
-                id: navigation_status_label; text: 'Status: Pilih titik di peta'; font_size: '18sp'
+                id: navigation_status_label
+                text: 'Status: Pilih titik di peta'
+                font_size: '18sp'
             Button:
-                id: navigate_button; text: 'Lakukan Navigasi'; font_size: '20sp'
-                disabled: True; on_press: app.confirm_navigation_goal()
+                text: 'Kalibrasi'
+                font_size: '20sp'
+                on_press: app.start_calibration()
             Button:
-                text: 'Stop & Kembali'; font_size: '20sp'; on_press: app.exit_navigation_mode()
+                id: navigate_button
+                text: 'Lakukan Navigasi'
+                font_size: '20sp'
+                disabled: True
+                on_press: app.confirm_navigation_goal()
+            Button:
+                text: 'Stop & Kembali'
+                font_size: '20sp'
+                on_press: app.exit_navigation_mode()
 
 ScreenManager:
     id: sm
     Screen:
         name: 'main_menu'
         BoxLayout:
-            orientation: 'vertical'; padding: 40; spacing: 20
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
             Label:
-                text: 'Waiter Bot Control Center'; font_size: '30sp'
+                text: 'Waiter Bot Control Center'
+                font_size: '30sp'
             Button:
-                text: 'Mode Controller'; font_size: '22sp'; on_press: app.go_to_controller_mode()
+                text: 'Mode Controller'
+                font_size: '22sp'
+                on_press: app.go_to_controller_mode()
             Button:
-                text: 'Mode Mapping'; font_size: '22sp'; on_press: sm.current = 'pre_mapping'
+                text: 'Mode Mapping'
+                font_size: '22sp'
+                on_press: sm.current = 'pre_mapping'
             Button:
-                text: 'Mode Navigasi'; font_size: '22sp'; on_press: sm.current = 'nav_selection'
+                text: 'Mode Navigasi'
+                font_size: '22sp'
+                on_press: sm.current = 'nav_selection'
     Screen:
         name: 'pre_mapping'
         BoxLayout:
-            orientation: 'vertical'; padding: 40; spacing: 20
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
             Label:
-                text: 'Masukkan Nama Peta'; font_size: '26sp'
+                text: 'Masukkan Nama Peta'
+                font_size: '26sp'
             TextInput:
-                id: map_name_input; hint_text: 'Contoh: peta_lantai_1'; font_size: '20sp'
-                multiline: False; size_hint_y: None; height: '48dp'
+                id: map_name_input
+                hint_text: 'Contoh: peta_lantai_1'
+                font_size: '20sp'
+                multiline: False
+                size_hint_y: None
+                height: '48dp'
             Button:
-                text: 'Mulai Mapping'; font_size: '22sp'; on_press: app.go_to_mapping_mode(map_name_input.text)
+                text: 'Mulai Mapping'
+                font_size: '22sp'
+                on_press: app.go_to_mapping_mode(map_name_input.text)
             Button:
-                text: 'Kembali ke Menu'; font_size: '22sp'; on_press: sm.current = 'main_menu'
+                text: 'Kembali ke Menu'
+                font_size: '22sp'
+                on_press: sm.current = 'main_menu'
     Screen:
         name: 'controller'
         BoxLayout:
-            orientation: 'vertical'; padding: 40; spacing: 20
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
             Label:
-                id: controller_status_label; text: 'Status: Siap'; font_size: '20sp'
+                id: controller_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
             Button:
-                text: 'Stop & Kembali ke Menu'; font_size: '22sp'; on_press: app.exit_controller_mode()
+                text: 'Stop & Kembali ke Menu'
+                font_size: '22sp'
+                on_press: app.exit_controller_mode()
     Screen:
         name: 'mapping'
         BoxLayout:
-            orientation: 'vertical'; padding: 40; spacing: 20
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
             Label:
-                id: mapping_status_label; text: 'Status: Siap'; font_size: '20sp'
+                id: mapping_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
             Label:
-                id: current_map_name_label; text: 'Memetakan: '; font_size: '18sp'; color: 0.7, 0.7, 0.7, 1
+                id: current_map_name_label
+                text: 'Memetakan: '
+                font_size: '18sp'
+                color: 0.7, 0.7, 0.7, 1
             Button:
-                text: 'Selesai Mapping & Simpan Otomatis'; font_size: '22sp'; on_press: app.exit_mapping_mode()
+                text: 'Selesai Mapping & Simpan Otomatis'
+                font_size: '22sp'
+                on_press: app.exit_mapping_mode()
     NavSelectionScreen:
         name: 'nav_selection'
     NavigationScreen:
@@ -135,93 +225,113 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ===== PERUBAHAN UTAMA DI SINI =====
-    def on_map_touch(self, touch, image_widget):
-        """Menangani sentuhan pada peta dan mengonversi koordinat."""
+    def start_calibration(self):
+        """Memulai proses kalibrasi."""
         screen = self.root.get_screen('navigation')
-        marker_layout = screen.ids.marker_layout
-        
-        # Dapatkan ukuran gambar asli dan ukuran widget yang menampilkannya
-        image_w, image_h = image_widget.texture.size
-        widget_w, widget_h = image_widget.size
-        
-        if image_w == 0 or image_h == 0: return
+        screen.is_calibrating = True
+        screen.calibration_step = 1
+        screen.ids.navigation_status_label.text = "Kalibrasi (1/2):\nSentuh pojok KIRI ATAS peta"
+        screen.ids.marker_layout.clear_widgets()
+        screen.ids.navigate_button.disabled = True
 
-        # Hitung skala dan offset karena 'keep_ratio: True'
-        scale_w = widget_w / image_w
-        scale_h = widget_h / image_h
-        scale = min(scale_w, scale_h)
+    def on_map_touch(self, touch, image_widget):
+        screen = self.root.get_screen('navigation')
 
-        displayed_w = image_w * scale
-        displayed_h = image_h * scale
+        if screen.is_calibrating:
+            if screen.calibration_step == 1:
+                screen.calib_point1 = touch.pos
+                screen.calibration_step = 2
+                screen.ids.navigation_status_label.text = "Kalibrasi (2/2):\nSentuh pojok KANAN BAWAH peta"
+            elif screen.calibration_step == 2:
+                screen.calib_point2 = touch.pos
+                screen.is_calibrating = False
+                screen.ids.navigation_status_label.text = "Kalibrasi Selesai!\nSilakan pilih titik tujuan."
+        else:
+            if not screen.calib_point1 or not screen.calib_point2:
+                screen.ids.navigation_status_label.text = "Harap lakukan kalibrasi terlebih dahulu!"
+                return
 
-        offset_x = (widget_w - displayed_w) / 2
-        offset_y = (widget_h - displayed_h) / 2
-        
-        # Pastikan sentuhan berada di dalam area gambar yang ditampilkan
-        if not (offset_x <= touch.x - image_widget.x < offset_x + displayed_w and
-                offset_y <= touch.y - image_widget.y < offset_y + displayed_h):
-            print("INFO: Sentuhan di luar area peta.")
-            return
+            if not (screen.calib_point1[0] <= touch.x <= screen.calib_point2[0] and
+                    screen.calib_point2[1] <= touch.y <= screen.calib_point1[1]):
+                print("INFO: Sentuhan di luar area peta yang dikalibrasi.")
+                return
+
+            marker_layout = screen.ids.marker_layout
+            marker_layout.clear_widgets()
+            local_pos_for_marker = marker_layout.to_local(*touch.pos)
+            marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+            marker.center = local_pos_for_marker
+            marker_layout.add_widget(marker)
+
+            if not image_widget.texture: return
+            norm_w, norm_h = image_widget.texture.size
             
-        # --- Kalkulasi Koordinat Piksel ---
-        # 1. Ubah sentuhan menjadi koordinat lokal terhadap widget gambar
-        touch_on_image_x = touch.x - image_widget.x - offset_x
-        touch_on_image_y = touch.y - image_widget.y - offset_y
-        
-        # 2. Konversi dari koordinat widget ke koordinat piksel gambar asli
-        pixel_x_for_ros = touch_on_image_x / scale
-        pixel_y_for_ros = touch_on_image_y / scale
-        
-        # Simpan koordinat piksel untuk dikirim saat tombol konfirmasi ditekan
-        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, image_w, image_h)
-        
-        # --- Tampilkan Penanda (Marker) 'X' ---
-        marker_layout.clear_widgets()
-        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        # Posisikan marker tepat di titik sentuhan
-        marker.center = touch.pos
-        marker_layout.add_widget(marker)
-        
-        screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
+            calib_width_px = screen.calib_point2[0] - screen.calib_point1[0]
+            calib_height_px = screen.calib_point1[1] - screen.calib_point2[1]
+
+            if calib_width_px == 0 or calib_height_px == 0: return
+
+            relative_touch_x = touch.x - screen.calib_point1[0]
+            relative_touch_y = screen.calib_point1[1] - touch.y
+
+            pixel_x_for_ros = (relative_touch_x / calib_width_px) * norm_w
+            pixel_y_for_ros = (relative_touch_y / calib_height_px) * norm_h
+
+            screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
+            screen.ids.navigate_button.disabled = False
+            screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
         if screen.selected_pixel_coords:
             px, py, w, h = screen.selected_pixel_coords
             self.manager.send_goal_from_pixel(px, py, w, h)
-            
-            # Reset setelah goal dikirim
             screen.ids.navigate_button.disabled = True
             screen.ids.marker_layout.clear_widgets()
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # ... (Sisa fungsi tidak berubah) ...
     def go_to_controller_mode(self):
-        status = self.manager.start_controller(); self.update_status_label('controller', 'controller_status_label', status); self.root.current = 'controller'
+        status = self.manager.start_controller()
+        self.update_status_label('controller', 'controller_status_label', status)
+        self.root.current = 'controller'
+        
     def exit_controller_mode(self):
-        self.manager.stop_controller(); self.root.current = 'main_menu'
+        self.manager.stop_controller()
+        self.root.current = 'main_menu'
+        
     def go_to_mapping_mode(self, map_name):
-        if not map_name.strip(): self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA KOSONG!'; return
-        status = self.manager.start_mapping(map_name); self.root.current = 'mapping'
+        if not map_name.strip():
+            self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
+            return
+        status = self.manager.start_mapping(map_name)
+        self.root.current = 'mapping'
         Clock.schedule_once(lambda dt: self.update_mapping_labels(status, map_name), 0.1)
+        
     def update_mapping_labels(self, status, map_name):
         screen = self.root.get_screen('mapping')
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
+        
     def exit_mapping_mode(self):
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\nMohon tunggu.')
         Clock.schedule_once(self._finish_exit_mapping, 1)
+        
     def _finish_exit_mapping(self, dt):
-        self.manager.stop_mapping(); self.root.current = 'main_menu'
+        self.manager.stop_mapping()
+        self.root.current = 'main_menu'
+
     def start_navigation_with_map(self, map_name, *args):
-        self.manager.start_navigation(map_name); self.root.current = 'navigation'
+        self.manager.start_navigation(map_name)
+        self.root.current = 'navigation'
+        
     def exit_navigation_mode(self):
-        self.manager.stop_navigation(); self.root.current = 'main_menu'
+        self.manager.stop_navigation()
+        self.root.current = 'main_menu'
+        
     def on_stop(self):
         self.manager.shutdown()
+
     @mainthread
     def update_status_label(self, screen_name, label_id, new_text):
         if self.root:
@@ -229,7 +339,8 @@ ScreenManager:
                 screen = self.root.get_screen(screen_name)
                 if screen and label_id in screen.ids:
                     screen.ids[label_id].text = new_text
-            except Exception as e: print(f"Gagal update GUI: {e}")
+            except Exception as e:
+                print(f"Gagal update GUI: {e}")
 
 if __name__ == '__main__':
     MainApp().run()
