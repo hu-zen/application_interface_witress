@@ -61,6 +61,8 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
+#<-- KODE KV UNTUK LAYAR LAIN TETAP SAMA -->
+
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -206,15 +208,29 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
+    # ===== PERBAIKAN: Logika baru untuk posisi penanda 'X' =====
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
-        screen.ids.marker_layout.clear_widgets()
+        marker_layout = screen.ids.marker_layout
+        
+        marker_layout.clear_widgets()
+
+        # Konversi koordinat sentuhan (window) ke koordinat lokal di dalam marker_layout
+        local_pos = marker_layout.to_local(*touch.pos)
+        
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        marker.pos = (touch.x - marker.width / 2, touch.y - marker.height / 2)
-        screen.ids.marker_layout.add_widget(marker)
-        local_x = touch.x - image_widget.x
-        local_y = touch.y - image_widget.y
-        screen.selected_pixel_coords = (local_x, local_y, image_widget.width, image_widget.height)
+        
+        # Gunakan 'center' untuk penempatan yang lebih akurat
+        marker.center_x = local_pos[0]
+        marker.center_y = local_pos[1]
+        
+        marker_layout.add_widget(marker)
+
+        # Logika untuk konversi ke koordinat ROS tetap sama
+        local_x_for_ros = touch.x - image_widget.x
+        local_y_for_ros = touch.y - image_widget.y
+        screen.selected_pixel_coords = (local_x_for_ros, local_y_for_ros, image_widget.norm_image_size[0], image_widget.norm_image_size[1])
+        
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
