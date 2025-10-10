@@ -206,31 +206,54 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
+    # ===== PERBAIKAN UTAMA: Logika baru untuk posisi 'X' yang akurat =====
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
         
-        marker_layout.clear_widgets()
+        # 1. Hitung skala dan posisi gambar yang sebenarnya di dalam widget
+        widget_w, widget_h = image_widget.size
+        norm_w, norm_h = image_widget.norm_image_size
 
-        local_pos = marker_layout.to_local(*touch.pos)
+        if norm_w == 0 or norm_h == 0:
+            return
+
+        # Tentukan skala gambar yang ditampilkan
+        ratio_w = widget_w / norm_w
+        ratio_h = widget_h / norm_h
+        scale = min(ratio_w, ratio_h)
+
+        # Hitung ukuran gambar yang ditampilkan di layar
+        disp_w = norm_w * scale
+        disp_h = norm_h * scale
+
+        # Hitung offset (garis hitam/letterboxing)
+        offset_x = (widget_w - disp_w) / 2
+        offset_y = (widget_h - disp_h) / 2
+
+        # 2. Periksa apakah sentuhan berada di dalam area gambar (bukan di area kosong)
+        touch_local_x = touch.x - image_widget.x
+        touch_local_y = touch.y - image_widget.y
         
+        if not (offset_x <= touch_local_x <= offset_x + disp_w and 
+                offset_y <= touch_local_y <= offset_y + disp_h):
+            print("INFO: Sentuhan di luar area peta.")
+            return
+
+        # 3. Tempatkan penanda 'X' tepat di posisi sentuhan
+        marker_layout.clear_widgets()
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        marker.center_x = local_pos[0]
-        marker.center_y = local_pos[1]
-        
+        # Posisi 'X' dihitung dari koordinat global sentuhan
+        marker.center = touch.pos
         marker_layout.add_widget(marker)
         
-        # Perhitungan untuk ROS menggunakan ukuran gambar yang sebenarnya (norm_image_size)
-        # dan posisi sentuhan relatif terhadap widget gambar
-        img_x, img_y = image_widget.pos
-        img_w, img_h = image_widget.norm_image_size # Ukuran gambar asli di dalam widget
-
-        # Hitung posisi sentuhan relatif terhadap sudut kiri bawah gambar di dalam widget
-        touch_x_rel = touch.x - img_x
-        touch_y_rel = touch.y - img_y
-
-        screen.selected_pixel_coords = (touch_x_rel, touch_y_rel, img_w, img_h)
+        # 4. Hitung koordinat piksel yang akurat untuk dikirim ke ROS
+        pixel_x = (touch_local_x - offset_x) / scale
+        pixel_y = (touch_local_y - offset_y) / scale
         
+        screen.selected_pixel_coords = (pixel_x, pixel_y, norm_w, norm_h)
+        
+        # 5. Aktifkan tombol dan update status
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
