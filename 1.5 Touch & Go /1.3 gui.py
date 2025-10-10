@@ -18,15 +18,14 @@ from manager import RosManager
 # ============ AREA KALIBRASI VISUAL POSISI 'X' ==================
 # ==================================================================
 # Gunakan nilai ini untuk menggeser posisi 'X' agar tepat di kursor.
-# Berdasarkan data Anda (klik di 414, X muncul di 752), kita perlu menggeser X ke kiri.
-# Perkiraan awal: 414 - 752 = -338
+# Nilai awal dihitung dari data yang Anda berikan.
 #
 # CARA MENYESUAIKAN:
-# - Jika 'X' muncul di KANAN dari kursor Anda, PERKECIL angkanya (misal: dari -338 menjadi -340).
-# - Jika 'X' muncul di KIRI dari kursor Anda, PERBESAR angkanya (misal: dari -338 menjadi -330).
-# - Lakukan hal yang sama untuk Y.
+# - Jika 'X' muncul di KANAN dari kursor Anda, PERKECIL angkanya (buat lebih negatif, misal: -340).
+# - Jika 'X' muncul di KIRI dari kursor Anda, PERBESAR angkanya (buat kurang negatif, misal: -330).
+# - Lakukan hal yang sama untuk Y. Ubah, simpan, dan jalankan ulang untuk melihat hasilnya.
 VISUAL_OFFSET_X = -338
-VISUAL_OFFSET_Y = -198 # Perkiraan awal dari data Anda: 348 - 546 = -198
+VISUAL_OFFSET_Y = -198
 # ==================================================================
 
 
@@ -78,7 +77,7 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-#<-- Desain KV di sini tidak berubah, jadi saya persingkat -->
+#<-- Desain KV di sini tidak berubah dari versi sebelumnya -->
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -234,8 +233,9 @@ ScreenManager:
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
         
         # Terapkan offset manual ke posisi sentuhan
-        adjusted_x = touch.x + VISUAL_OFFSET_X
-        adjusted_y = touch.y + VISUAL_OFFSET_Y
+        # `touch.pos` adalah koordinat global, jadi kita terapkan offset langsung ke sana
+        adjusted_x = touch.pos[0] + VISUAL_OFFSET_X
+        adjusted_y = touch.pos[1] + VISUAL_OFFSET_Y
         marker.center = (adjusted_x, adjusted_y)
         
         marker_layout.add_widget(marker)
