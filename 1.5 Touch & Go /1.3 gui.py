@@ -32,9 +32,6 @@ class NavSelectionScreen(Screen):
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
-# ==================================================================
-# ==================== PERBAIKAN LOGIKA UTAMA ======================
-# ==================================================================
 class MapImage(TouchRippleBehavior, Image):
     # Properti untuk menyimpan referensi ke penanda 'X'
     marker = ObjectProperty(None, allownone=True)
@@ -49,7 +46,6 @@ class MapImage(TouchRippleBehavior, Image):
             # Buat penanda 'X' yang baru.
             # Karena logika ini ada di dalam kelas MapImage, `touch.pos`
             # secara otomatis memberikan koordinat LOKAL di dalam widget ini.
-            # Ini adalah kunci perbaikannya.
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -58,7 +54,6 @@ class MapImage(TouchRippleBehavior, Image):
             # Panggil fungsi di App utama untuk menangani logika ROS
             App.get_running_app().calculate_ros_goal(touch, self)
 
-            # Memproses event sentuhan
             return super().on_touch_down(touch)
         return False
 
@@ -92,7 +87,6 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # Desain KV tidak lagi memerlukan 'marker_layout'
         kv_design = """
 <NavSelectionScreen>:
     BoxLayout:
@@ -121,7 +115,6 @@ class MainApp(App):
         orientation: 'vertical'
         padding: 10
         spacing: 10
-        # MapImage sekarang akan menangani penanda 'X' sendiri
         MapImage:
             id: map_viewer
             source: ''
@@ -239,7 +232,6 @@ ScreenManager:
         """Fungsi ini hanya untuk menghitung koordinat ROS, bukan untuk visual."""
         screen = self.root.get_screen('navigation')
         
-        # Koordinat sentuhan sudah bersifat lokal terhadap image_widget
         touch_local_x, touch_local_y = touch.pos
 
         if not image_widget.texture: return
@@ -247,7 +239,6 @@ ScreenManager:
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
-        # Logika kalkulasi untuk ROS tidak berubah, karena sudah benar
         widget_ratio = widget_w / widget_h if widget_h > 0 else 0
         image_ratio = norm_w / norm_h if norm_h > 0 else 0
         if image_ratio == 0: return
@@ -279,7 +270,6 @@ ScreenManager:
             self.manager.send_goal_from_pixel(px, py, w, h)
             screen.ids.navigate_button.disabled = True
             
-            # Hapus penanda 'X' setelah goal dikirim
             map_viewer = screen.ids.map_viewer
             if map_viewer.marker and map_viewer.marker.parent:
                 map_viewer.remove_widget(map_viewer.marker)
@@ -288,7 +278,6 @@ ScreenManager:
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # Sisa fungsi tidak berubah
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
