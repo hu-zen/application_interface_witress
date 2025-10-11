@@ -52,33 +52,44 @@ class RosManager:
         return None
 
     # ==================================================================
-    # ==================== FUNGSI INI DIPERBARUI =======================
+    # ==================== FUNGSI INI DIPERBARUI TOTAL =================
     # ==================================================================
     def _send_stop_command(self):
         """
-        Mengirim aliran perintah berhenti ke /cmd_vel selama 0.5 detik
-        untuk memastikan semua gerakan berhenti.
+        Menghentikan robot dengan cara yang benar:
+        1. Membatalkan goal navigasi saat ini di move_base.
+        2. Memberi waktu pada move_base untuk menghentikan robot.
+        3. Sebagai cadangan, membanjiri /cmd_vel dengan perintah berhenti.
         """
-        print("INFO: Membanjiri /cmd_vel dengan perintah berhenti...")
-        # Perintah ini akan mem-publish ke /cmd_vel dengan rate 20 Hz
+        print("INFO: Memulai prosedur penghentian robot...")
+        
+        # Langkah 1: Batalkan goal move_base secara resmi.
+        # Ini akan membuat move_base mengirim perintah kecepatan nol.
+        cancel_command = 'rostopic pub -1 /move_base/cancel actionlib_msgs/GoalID -- {}'
+        try:
+            print("INFO: Mengirim sinyal pembatalan goal ke /move_base/cancel...")
+            subprocess.run(cancel_command, shell=True, check=True, timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Beri waktu 0.5 detik agar move_base sempat memproses pembatalan dan mengirim perintah berhenti.
+            time.sleep(0.5)
+        except Exception as e:
+            print(f"WARN: Gagal mengirim sinyal pembatalan goal: {e}. Melanjutkan dengan metode paksa.")
+
+        # Langkah 2 (Cadangan): Jika langkah 1 gagal, banjiri /cmd_vel.
+        print("INFO: Membanjiri /cmd_vel dengan perintah berhenti sebagai cadangan...")
         stop_command = 'rostopic pub /cmd_vel geometry_msgs/Twist "linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}" -r 20'
         
         publisher_process = None
         try:
-            # Jalankan publisher di latar belakang
             publisher_process = subprocess.Popen(stop_command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            # Biarkan ia berjalan selama 0.5 detik untuk membanjiri topik
-            time.sleep(0.5)
+            time.sleep(0.5) # Biarkan berjalan selama 0.5 detik
         except Exception as e:
-            print(f"ERROR: Gagal memulai publisher perintah berhenti: {e}")
+            print(f"ERROR: Gagal memulai publisher cadangan: {e}")
         finally:
-            # Hentikan publisher setelah selesai
             if publisher_process:
                 try:
                     os.killpg(os.getpgid(publisher_process.pid), signal.SIGTERM)
-                    print("INFO: Publisher perintah berhenti telah dihentikan.")
                 except ProcessLookupError:
-                    pass # Proses mungkin sudah selesai dengan sendirinya
+                    pass # Proses mungkin sudah selesai
     # ==================================================================
 
     def start_controller(self):
@@ -198,7 +209,7 @@ class RosManager:
             self.map_metadata = None
 
     def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
-        """Versi ini diubah untuk menerima piksel dari kiri-bawah (Kivy)"""
+        """Mengonversi koordinat Kivy (kiri-bawah) ke koordinat dunia ROS."""
         if not self.map_metadata:
             print("ERROR: Metadata peta belum dimuat. Tidak bisa mengirim goal.")
             return
@@ -207,6 +218,7 @@ class RosManager:
         origin_x = self.map_metadata['origin'][0]
         origin_y = self.map_metadata['origin'][1]
         
+        # Kalkulasi yang benar dengan memperhitungkan origin
         map_x = (touch_x * resolution) + origin_x
         map_y = (touch_y * resolution) + origin_y
         
