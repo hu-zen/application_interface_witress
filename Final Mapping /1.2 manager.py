@@ -31,13 +31,10 @@ class RosManager:
     def start_roscore(self):
         try:
             subprocess.check_output(["pidof", "roscore"])
-            print("INFO: roscore sudah berjalan.")
         except subprocess.CalledProcessError:
-            print("INFO: Memulai roscore di latar belakang...")
             try:
                 self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 time.sleep(4)
-                print("INFO: roscore seharusnya sudah aktif.")
             except Exception as e:
                 print(f"FATAL: Gagal memulai roscore: {e}")
 
@@ -46,42 +43,27 @@ class RosManager:
             try:
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 process.wait(timeout=5)
-                print(f"INFO: Grup proses '{name}' berhasil dihentikan.")
             except (ProcessLookupError, subprocess.TimeoutExpired, OSError):
-                print(f"WARN: Gagal menghentikan '{name}' dengan normal.")
+                # Pesan peringatan dihilangkan
+                pass
         return None
 
-    # ==================================================================
-    # ==================== FUNGSI INI DIPERBARUI TOTAL =================
-    # ==================================================================
     def _send_stop_command(self):
-        """
-        Menghentikan robot dengan cara yang benar:
-        1. Membatalkan goal navigasi saat ini di move_base.
-        2. Memberi waktu pada move_base untuk menghentikan robot.
-        3. Sebagai cadangan, membanjiri /cmd_vel dengan perintah berhenti.
-        """
-        print("INFO: Memulai prosedur penghentian robot...")
-        
-        # Langkah 1: Batalkan goal move_base secara resmi.
-        # Ini akan membuat move_base mengirim perintah kecepatan nol.
+        """Menghentikan robot dengan membatalkan goal dan membanjiri /cmd_vel."""
         cancel_command = 'rostopic pub -1 /move_base/cancel actionlib_msgs/GoalID -- {}'
         try:
-            print("INFO: Mengirim sinyal pembatalan goal ke /move_base/cancel...")
             subprocess.run(cancel_command, shell=True, check=True, timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            # Beri waktu 0.5 detik agar move_base sempat memproses pembatalan dan mengirim perintah berhenti.
             time.sleep(0.5)
-        except Exception as e:
-            print(f"WARN: Gagal mengirim sinyal pembatalan goal: {e}. Melanjutkan dengan metode paksa.")
+        except Exception:
+            # Gagal membatalkan goal, lanjutkan dengan metode paksa (tanpa pesan)
+            pass
 
-        # Langkah 2 (Cadangan): Jika langkah 1 gagal, banjiri /cmd_vel.
-        print("INFO: Membanjiri /cmd_vel dengan perintah berhenti sebagai cadangan...")
         stop_command = 'rostopic pub /cmd_vel geometry_msgs/Twist "linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}" -r 20'
         
         publisher_process = None
         try:
             publisher_process = subprocess.Popen(stop_command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(0.5) # Biarkan berjalan selama 0.5 detik
+            time.sleep(0.5)
         except Exception as e:
             print(f"ERROR: Gagal memulai publisher cadangan: {e}")
         finally:
@@ -89,15 +71,13 @@ class RosManager:
                 try:
                     os.killpg(os.getpgid(publisher_process.pid), signal.SIGTERM)
                 except ProcessLookupError:
-                    pass # Proses mungkin sudah selesai
-    # ==================================================================
+                    pass
 
     def start_controller(self):
         if not self.is_controller_running:
             command = "roslaunch my_robot_pkg controller.launch"
             self.controller_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.is_controller_running = True
-            print("INFO: Mode Controller dimulai.")
             return "Status: AKTIF"
         return "Status: Sudah Aktif"
 
@@ -106,7 +86,6 @@ class RosManager:
             self._send_stop_command()
             self.controller_process = self._stop_process_group(self.controller_process, "Controller")
             self.is_controller_running = False
-            print("INFO: Mode Controller dihentikan.")
         return "Status: DIMATIKAN"
 
     def start_mapping(self, map_name):
@@ -116,7 +95,7 @@ class RosManager:
             try:
                 self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
                 self.is_mapping_running = True
-                print(f"INFO: Mode Mapping dimulai untuk '{self.current_map_name}'.")
+                print(f"INFO: Mode Mapping dimulai untuk peta '{self.current_map_name}'.")
                 self.start_controller()
                 return "Mode Pemetaan AKTIF.\\nSilakan gerakkan robot."
             except Exception as e:
@@ -139,9 +118,9 @@ class RosManager:
             pkg_path = self.rospack.get_path('autonomus_mobile_robot')
             map_save_path = os.path.join(pkg_path, 'maps', self.current_map_name)
             command = f"rosrun map_server map_saver -f {map_save_path}"
-            print(f"INFO: Menyimpan peta otomatis ke '{map_save_path}'...")
-            result = subprocess.run(command, shell=True, check=True, timeout=15, capture_output=True, text=True)
-            print("INFO: Peta berhasil disimpan!"); print(result.stdout)
+            print(f"INFO: Menyimpan peta ke '{map_save_path}'...")
+            subprocess.run(command, shell=True, check=True, timeout=15, capture_output=True, text=True)
+            print("INFO: Peta berhasil disimpan!")
         except Exception as e:
             print(f"ERROR: Gagal menyimpan peta saat keluar: {e}")
 
@@ -203,13 +182,11 @@ class RosManager:
             map_yaml_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
             with open(map_yaml_path, 'r') as f:
                 self.map_metadata = yaml.safe_load(f)
-                print(f"INFO: Metadata untuk peta '{map_name}' dimuat.")
         except Exception as e:
             print(f"ERROR: Gagal memuat metadata peta '{map_name}': {e}")
             self.map_metadata = None
 
     def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
-        """Mengonversi koordinat Kivy (kiri-bawah) ke koordinat dunia ROS."""
         if not self.map_metadata:
             print("ERROR: Metadata peta belum dimuat. Tidak bisa mengirim goal.")
             return
@@ -218,12 +195,9 @@ class RosManager:
         origin_x = self.map_metadata['origin'][0]
         origin_y = self.map_metadata['origin'][1]
         
-        # Kalkulasi yang benar dengan memperhitungkan origin
         map_x = (touch_x * resolution) + origin_x
         map_y = (touch_y * resolution) + origin_y
         
-        print(f"INFO: Sentuhan di piksel ({touch_x:.2f}, {touch_y:.2f}) -> Dikonversi ke Goal ROS ({map_x:.2f}, {map_y:.2f})")
-
         goal_msg_yaml = f"""header:
   stamp: now
   frame_id: "map"
@@ -242,15 +216,14 @@ pose:
         
         try:
             subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print("INFO: Perintah GOAL dikirim ke /move_base_simple/goal")
         except Exception as e:
             print(f"ERROR: Gagal mengirim perintah goal: {e}")
 
     def shutdown(self):
-        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
+        print("INFO: Shutdown dipanggil. Menghentikan semua proses...")
         self._send_stop_command()
         self.stop_mapping()
         self.stop_navigation()
         self.stop_controller() 
         if self.roscore_process:
-            self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
+            self._stop_process_group(self.roscore_process, "roscore")
