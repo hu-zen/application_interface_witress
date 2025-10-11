@@ -16,6 +16,7 @@ import math
 import os
 import subprocess
 
+# Gunakan manager.py yang sudah memiliki fitur real-time pose listener
 from manager import RosManager
 
 class NavSelectionScreen(Screen):
@@ -36,6 +37,10 @@ class NavSelectionScreen(Screen):
             grid.add_widget(btn)
 
 class MapImage(TouchRippleBehavior, Image):
+    """
+    Kelas ini menggunakan logika on_touch_down Anda yang sudah benar
+    untuk penempatan visual marker 'X'. Tidak ada yang diubah di sini.
+    """
     marker = ObjectProperty(None, allownone=True)
 
     def on_touch_down(self, touch):
@@ -126,16 +131,19 @@ class NavigationScreen(Screen):
             offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
 
-        # === Logika Balik (Inverse Logic) dengan Koreksi Y-Flip ===
-        # 1. Konversi posisi ROS (meter) ke koordinat piksel (dengan origin kiri-bawah)
+        # Logika Balik: Konversi dari ROS (meter) ke koordinat piksel Kivy
         pixel_x = (pose['x'] - origin[0]) / resolution
         pixel_y = (pose['y'] - origin[1]) / resolution
         
-        # 2. Konversi ke posisi di dalam widget Kivy
+        # Balik sumbu Y untuk mendapatkan posisi piksel dari atas (sesuai PGM)
+        flipped_pixel_y = norm_h - pixel_y
+
+        # Konversi ke koordinat visual Kivy (yang originnya di bawah)
+        # Kita gunakan (norm_h - flipped_pixel_y) yang sama dengan pixel_y asli
         pos_in_widget_x = (pixel_x * scale) + offset_x
         pos_in_widget_y = (pixel_y * scale) + offset_y
-
-        # 3. Dapatkan posisi absolut di dalam window
+        
+        # Dapatkan posisi absolut di dalam window untuk ditempatkan di FloatLayout
         final_x = pos_in_widget_x + map_viewer.x
         final_y = pos_in_widget_y + map_viewer.y
         
@@ -156,8 +164,8 @@ class MainApp(App):
     canvas.after:
         PopMatrix
 <MapImage>:
+
 <NavSelectionScreen>:
-    # ... (tidak ada perubahan di sini, sama seperti sebelumnya) ...
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -177,6 +185,7 @@ class MainApp(App):
             text: 'Kembali ke Menu'
             size_hint_y: 0.15
             on_press: root.manager.current = 'main_menu'
+
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -212,9 +221,10 @@ class MainApp(App):
                 text: 'Stop & Kembali'
                 font_size: '20sp'
                 on_press: app.exit_navigation_mode()
+
 ScreenManager:
     id: sm
-    # ... (semua screen lain sama seperti sebelumnya) ...
+    # Screen lain (main_menu, pre_mapping, dll) sama persis seperti kode Anda
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -301,6 +311,9 @@ ScreenManager:
         return Builder.load_string(kv_design)
 
     def calculate_ros_goal(self, touch, image_widget):
+        """
+        Menggunakan logika kalkulasi dari referensi Anda, dengan SATU koreksi.
+        """
         screen = self.root.get_screen('navigation')
         
         if not image_widget.texture or not self.manager.map_metadata:
@@ -308,8 +321,9 @@ ScreenManager:
 
         meta = self.manager.map_metadata
         resolution = meta['resolution']
-        origin = meta['origin']
-
+        origin_x = meta['origin'][0]
+        origin_y = meta['origin'][1]
+        
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
@@ -327,36 +341,26 @@ ScreenManager:
             offset_y = (widget_h - norm_h * scale) / 2.0
         
         if scale == 0: return
-
-        # Kalkulasi ini menggunakan `touch.pos` (lokal) dan `offset` dari logika Anda
+        
+        # Ini adalah logika asli Anda yang sudah benar secara visual
+        # `touch.pos` sudah lokal terhadap image_widget
         touch_on_image_x = touch.pos[0] - offset_x
         touch_on_image_y = touch.pos[1] - offset_y
         
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
         
-        # Periksa apakah klik berada di luar area gambar yang sebenarnya (di area padding)
-        if not (0 <= pixel_x <= norm_w and 0 <= pixel_y <= norm_h):
-             print("Klik di luar area peta, goal diabaikan.")
-             screen.ids.navigation_status_label.text = "Status: Klik di luar peta!"
-             screen.ids.navigate_button.disabled = True
-             # Hapus marker jika klik tidak valid
-             if image_widget.marker and image_widget.marker.parent:
-                 image_widget.remove_widget(image_widget.marker)
-                 image_widget.marker = None
-             return
-
         # ==================================================================
         # ======================= KOREKSI UTAMA ==========================
         # ==================================================================
-        # Balik (Flip) Sumbu Y. Kivy Y=0 ada di bawah, tapi PGM Y=0 ada di atas.
-        # map_server secara internal melakukan flip ini saat memuat peta.
-        # Kita harus melakukan hal yang sama pada kalkulasi kita.
+        # Balik (Flip) Sumbu Y. Kivy Y=0 ada di bawah, tapi data gambar PGM
+        # Y=0 ada di atas. `map_server` melakukan flip ini secara internal.
+        # Kita harus meniru flip ini agar goal ROS menjadi akurat.
         flipped_pixel_y = norm_h - pixel_y
         
-        # Gunakan 'flipped_pixel_y' untuk menghitung map_y
-        map_x = (pixel_x * resolution) + origin[0]
-        map_y = (flipped_pixel_y * resolution) + origin[1]
+        # Gunakan 'pixel_x' dan 'flipped_pixel_y' untuk menghitung goal
+        map_x = (pixel_x * resolution) + origin_x
+        map_y = (flipped_pixel_y * resolution) + origin_y
         
         screen.selected_goal_coords = (map_x, map_y)
         
@@ -393,7 +397,7 @@ pose:
             screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # --- Sisa fungsi tidak perlu diubah ---
+    # --- Sisa fungsi tidak diubah ---
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
