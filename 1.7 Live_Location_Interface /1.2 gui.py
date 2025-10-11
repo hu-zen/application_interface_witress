@@ -16,6 +16,7 @@ import math
 import os
 import subprocess
 
+# Manager.py tidak perlu diubah, jadi kita impor seperti biasa
 from manager import RosManager
 
 class NavSelectionScreen(Screen):
@@ -61,15 +62,6 @@ class NavigationScreen(Screen):
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True)
             self.ids.map_container.add_widget(self.robot_marker)
         
-        # ==================================================================
-        # ============== PERBAIKAN LOGIKA KLIK 'X' (BAGIAN 1) ==============
-        # ==================================================================
-        # Buat marker 'X' sekali saja saat layar pertama kali dibuat, lalu sembunyikan.
-        if not self.click_marker:
-            self.click_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True, is_visible=False)
-            self.ids.map_container.add_widget(self.click_marker)
-        # ==================================================================
-        
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
 
@@ -79,24 +71,37 @@ class NavigationScreen(Screen):
         self.cleanup_markers()
 
     def cleanup_markers(self):
-        # Sekarang cleanup hanya menyembunyikan marker, bukan menghapusnya
-        if self.click_marker:
-            self.click_marker.opacity = 0
+        if self.click_marker and self.click_marker.parent:
+            self.ids.map_container.remove_widget(self.click_marker)
+            self.click_marker = None
         if self.robot_marker:
             self.robot_marker.opacity = 0
+        self.selected_goal_coords = None
+        self.ids.navigate_button.disabled = True
 
+
+    # ==================================================================
+    # ==================== FUNGSI YANG DIPERBAIKI (1) ==================
+    # ==================================================================
     def on_map_touch(self, touch):
         map_viewer = self.ids.map_viewer
+        map_container = self.ids.map_container
+        
+        # Hanya proses jika klik berada di dalam area widget gambar peta
         if map_viewer.collide_point(*touch.pos):
-            # ==================================================================
-            # ============== PERBAIKAN LOGIKA KLIK 'X' (BAGIAN 2) ==============
-            # ==================================================================
-            # Alih-alih membuat/menghapus, kita hanya memindahkan marker yang sudah ada.
-            # Ini jauh lebih stabil dan akan selalu berfungsi.
-            self.click_marker.center = touch.pos
-            self.click_marker.opacity = 1 # Tampilkan marker
-            # ==================================================================
+            # Hapus marker lama jika ada
+            if self.click_marker and self.click_marker.parent:
+                map_container.remove_widget(self.click_marker)
 
+            # --- FIX 1: Konversi koordinat sentuhan ke sistem lokal container ---
+            # Ini memastikan 'X' muncul tepat di tempat Anda mengklik di dalam area peta.
+            local_pos = map_container.to_local(*touch.pos)
+
+            self.click_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+            self.click_marker.center = local_pos
+            map_container.add_widget(self.click_marker)
+
+            # Panggil fungsi kalkulasi goal
             app = App.get_running_app()
             app.calculate_ros_goal(touch, self)
 
@@ -124,6 +129,7 @@ class NavigationScreen(Screen):
         scaled_w = norm_w * self.map_scale
         scaled_h = norm_h * self.map_scale
         
+        # Offset adalah padding/ruang kosong di sekitar gambar
         self.map_offset = [
             (map_viewer.width - scaled_w) / 2,
             (map_viewer.height - scaled_h) / 2
@@ -135,7 +141,7 @@ class NavigationScreen(Screen):
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
         
-        if pose is None or not app.manager.map_metadata or self.map_scale == 0:
+        if pose is None or not app.manager.map_metadata or self.map_scale == 0 or not self.texture_size[1] > 0:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
         
@@ -146,22 +152,24 @@ class NavigationScreen(Screen):
         origin_x = meta.get('origin', [0,0,0])[0]
         origin_y = meta.get('origin', [0,0,0])[1]
 
+        # Konversi dari koordinat dunia (meter) ke koordinat piksel (origin kiri-bawah)
         pixel_x = (pose['x'] - origin_x) / resolution
-        # Balik sumbu Y untuk sistem koordinat Kivy
-        pixel_y = self.texture_size[1] - ((pose['y'] - origin_y) / resolution)
+        pixel_y = (pose['y'] - origin_y) / resolution
 
+        # Konversi dari koordinat piksel ke posisi di layar Kivy
+        # Tambahkan offset widget dan offset internal gambar
         final_x = (pixel_x * self.map_scale) + self.map_offset[0] + map_viewer.x
         final_y = (pixel_y * self.map_scale) + self.map_offset[1] + map_viewer.y
 
         self.robot_marker.center = (final_x, final_y)
-        self.robot_marker.angle = math.degrees(pose['yaw'])
+        # Rotasi dari radian ke derajat
+        self.robot_marker.angle = -math.degrees(pose['yaw'])
 
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-# Desain KV tidak berubah dari versi Anda yang berhasil
 <RobotMarker>:
     canvas.before:
         PushMatrix
@@ -172,7 +180,6 @@ class MainApp(App):
         PopMatrix
 
 <NavSelectionScreen>:
-    name: 'nav_selection'
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -201,7 +208,8 @@ class MainApp(App):
         spacing: 10
         FloatLayout:
             id: map_container
-            on_touch_down: root.on_map_touch(args[0])
+            # Event sentuhan sekarang ditangani oleh fungsi di dalam screen
+            on_touch_down: if self.collide_point(*args[1].pos): root.on_map_touch(args[1])
             MapImage:
                 id: map_viewer
                 source: ''
@@ -209,6 +217,7 @@ class MainApp(App):
                 keep_ratio: True 
                 size_hint: 1, 1
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+                # Panggil recalculate setiap kali ukuran atau posisi widget berubah
                 on_size: root.recalculate_transform()
                 on_pos: root.recalculate_transform()
         BoxLayout:
@@ -312,26 +321,47 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: app.exit_mapping_mode()
     NavSelectionScreen:
+        name: 'nav_selection'
     NavigationScreen:
+        name: 'navigation'
 """
         return Builder.load_string(kv_design)
 
+    # ==================================================================
+    # ==================== FUNGSI YANG DIPERBAIKI (2) ==================
+    # ==================================================================
     def calculate_ros_goal(self, touch, screen):
         image_widget = screen.ids.map_viewer
+        
         if not self.manager.map_metadata or screen.map_scale == 0:
             return
 
+        # --- FIX 2: Konversi koordinat sentuhan menjadi LOKAL ke widget gambar ---
+        # Ini adalah langkah kunci untuk memastikan kalkulasi kita konsisten
+        local_touch = image_widget.to_local(*touch.pos)
+        
         meta = self.manager.map_metadata
         resolution = meta['resolution']
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
         
-        touch_on_image_x = touch.pos[0] - image_widget.x - screen.map_offset[0]
-        touch_on_image_y = touch.pos[1] - image_widget.y - screen.map_offset[1]
+        # Hitung posisi klik relatif terhadap gambar yang diskalakan (tanpa padding)
+        touch_on_scaled_image_x = local_touch[0] - screen.map_offset[0]
+        touch_on_scaled_image_y = local_touch[1] - screen.map_offset[1]
         
-        pixel_x = touch_on_image_x / screen.map_scale
-        pixel_y = screen.texture_size[1] - (touch_on_image_y / screen.map_scale)
+        # Konversi kembali ke koordinat piksel pada gambar asli
+        pixel_x = touch_on_scaled_image_x / screen.map_scale
+        pixel_y = touch_on_scaled_image_y / screen.map_scale
         
+        # Validasi: Pastikan klik berada di dalam batas gambar, bukan di area padding
+        if not (0 <= pixel_x <= screen.texture_size[0] and 0 <= pixel_y <= screen.texture_size[1]):
+            print("INFO: Klik di luar area peta (di padding). Goal diabaikan.")
+            screen.cleanup_markers() # Hapus marker 'X'
+            screen.ids.navigation_status_label.text = "Status: Klik di luar peta!"
+            return
+
+        # --- FIX 3: Hapus pembalikan sumbu-y yang tidak perlu ---
+        # Sistem koordinat Kivy dan ROS Map sama-sama dari kiri-bawah
         map_x = (pixel_x * resolution) + origin_x
         map_y = (pixel_y * resolution) + origin_y
         
@@ -367,7 +397,7 @@ pose:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
 
             screen.ids.navigate_button.disabled = True
-            screen.ids.navigation_status_label.text = "Status: Goal terkirim! Klik titik lain untuk goal baru."
+            screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
     # --- Sisa fungsi tidak perlu diubah ---
     def go_to_controller_mode(self):
