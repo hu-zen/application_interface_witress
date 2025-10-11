@@ -14,15 +14,6 @@ import yaml
 
 from manager import RosManager
 
-# ==================================================================
-# ============ AREA KALIBRASI VISUAL POSISI 'X' (DIHAPUS) ==========
-# ==================================================================
-# Konstanta offset statis tidak lagi diperlukan.
-# VISUAL_OFFSET_X = -338
-# VISUAL_OFFSET_Y = -198
-# ==================================================================
-
-
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -53,7 +44,13 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
-        self.ids.marker_layout.clear_widgets()
+        
+        # Hapus penanda 'X' sebelumnya dari map_container
+        map_container = self.ids.map_container
+        widgets_to_remove = [widget for widget in map_container.children if isinstance(widget, Label)]
+        for widget in widgets_to_remove:
+            map_container.remove_widget(widget)
+
         self.selected_pixel_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
 
@@ -70,6 +67,9 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
+        # ==================================================================
+        # ==================== PERUBAHAN DESAIN KV =========================
+        # ==================================================================
         kv_design = """
 <NavSelectionScreen>:
     BoxLayout:
@@ -107,8 +107,8 @@ class MainApp(App):
                 keep_ratio: True 
                 size_hint: 1, 1
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-            FloatLayout:
-                id: marker_layout
+            # FloatLayout untuk marker_layout sudah dihapus dari sini
+            # Penanda 'X' akan ditambahkan langsung ke map_container
         BoxLayout:
             size_hint_y: None
             height: '60dp'
@@ -216,20 +216,28 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ===== PERBAIKAN FINAL ADA DI SINI =====
+    # ==================================================================
+    # ==================== PERBAIKAN LOGIKA UTAMA ======================
+    # ==================================================================
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
-        marker_layout = screen.ids.marker_layout
-        marker_layout.clear_widgets()
+        # Dapatkan container utama, yang merupakan parent dari image_widget
+        map_container = screen.ids.map_container
 
-        # 1. Tempatkan 'X' secara visual LANGSUNG di posisi kursor.
-        #    Kita tidak perlu offset manual karena `touch.pos` sudah
-        #    memberikan koordinat yang benar di dalam layout induk.
+        # Hapus penanda 'X' (Label) sebelumnya dari container
+        # Ini penting agar tidak menumpuk banyak 'X'
+        widgets_to_remove = [widget for widget in map_container.children if isinstance(widget, Label)]
+        for widget in widgets_to_remove:
+            map_container.remove_widget(widget)
+
+        # 1. Tempatkan penanda 'X' secara visual
+        # `touch.pos` memberikan koordinat di dalam sistem koordinat parent (map_container).
+        # Karena kita menambahkan marker ke map_container, ini akan selalu akurat.
         marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        marker.center = touch.pos  # <-- INI PERUBAHAN UTAMANYA
-        marker_layout.add_widget(marker)
+        marker.center = touch.pos
+        map_container.add_widget(marker)
         
-        # 2. Hitung koordinat untuk ROS (logika ini tetap sama karena sudah benar)
+        # 2. Hitung koordinat piksel untuk dikirim ke ROS (logika ini tidak berubah)
         if not image_widget.texture: return
         widget_w, widget_h = image_widget.size
         norm_w, norm_h = image_widget.texture.size
@@ -248,12 +256,16 @@ ScreenManager:
             offset_x = 0.0
             offset_y = (widget_h - (norm_h * scale)) / 2.0
         
+        # Konversi dari koordinat parent (map_container) ke lokal widget (MapImage)
+        # image_widget.x adalah posisi widget relatif terhadap parent-nya.
         touch_local_x = touch.x - image_widget.x
         touch_local_y = touch.y - image_widget.y
 
+        # Kurangi offset (garis hitam) untuk mendapatkan posisi pada gambar asli
         touch_on_image_x = touch_local_x - offset_x
         touch_on_image_y = touch_local_y - offset_y
 
+        # Ubah skala untuk mendapatkan koordinat piksel final
         pixel_x_for_ros = touch_on_image_x / scale
         pixel_y_for_ros = touch_on_image_y / scale
         
@@ -263,18 +275,23 @@ ScreenManager:
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
-
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
         if screen.selected_pixel_coords:
             px, py, w, h = screen.selected_pixel_coords
             self.manager.send_goal_from_pixel(px, py, w, h)
             screen.ids.navigate_button.disabled = True
-            screen.ids.marker_layout.clear_widgets()
+            
+            # Hapus penanda 'X' dari map_container setelah goal dikirim
+            map_container = screen.ids.map_container
+            widgets_to_remove = [widget for widget in map_container.children if isinstance(widget, Label)]
+            for widget in widgets_to_remove:
+                map_container.remove_widget(widget)
+
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # ... Sisa fungsi tidak berubah ...
+    # Sisa fungsi tidak berubah
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
