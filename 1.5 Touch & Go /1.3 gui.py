@@ -14,6 +14,15 @@ import yaml
 
 from manager import RosManager
 
+# ==================================================================
+# ============ AREA KALIBRASI VISUAL POSISI 'X' (DIHAPUS) ==========
+# ==================================================================
+# Konstanta offset statis tidak lagi diperlukan.
+# VISUAL_OFFSET_X = -338
+# VISUAL_OFFSET_Y = -198
+# ==================================================================
+
+
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -62,7 +71,6 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-#<-- Desain KV di sini tidak berubah dari versi sebelumnya -->
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -212,53 +220,37 @@ ScreenManager:
     def on_map_touch(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         marker_layout = screen.ids.marker_layout
+        marker_layout.clear_widgets()
 
-        # Pastikan gambar sudah dimuat
-        if not image_widget.texture:
-            return
-
-        # 1. Hitung skala dan offset gambar yang sebenarnya ditampilkan
+        # 1. Tempatkan 'X' secara visual LANGSUNG di posisi kursor.
+        #    Kita tidak perlu offset manual karena `touch.pos` sudah
+        #    memberikan koordinat yang benar di dalam layout induk.
+        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+        marker.center = touch.pos  # <-- INI PERUBAHAN UTAMANYA
+        marker_layout.add_widget(marker)
+        
+        # 2. Hitung koordinat untuk ROS (logika ini tetap sama karena sudah benar)
+        if not image_widget.texture: return
         widget_w, widget_h = image_widget.size
         norm_w, norm_h = image_widget.texture.size
-
         if norm_w == 0 or norm_h == 0: return
 
         widget_ratio = widget_w / widget_h if widget_h > 0 else 0
         image_ratio = norm_w / norm_h if norm_h > 0 else 0
-        
         if image_ratio == 0: return
 
-        # Logika dinamis untuk menghitung area gambar yang sebenarnya terlihat
         if widget_ratio > image_ratio:
             scale = widget_h / norm_h
-            displayed_w = norm_w * scale
-            displayed_h = widget_h
-            offset_x = (widget_w - displayed_w) / 2.0
+            offset_x = (widget_w - (norm_w * scale)) / 2.0
             offset_y = 0.0
         else:
             scale = widget_w / norm_w
-            displayed_w = widget_w
-            displayed_h = norm_h * scale
             offset_x = 0.0
-            offset_y = (widget_h - displayed_h) / 2.0
+            offset_y = (widget_h - (norm_h * scale)) / 2.0
         
-        # 2. Periksa apakah sentuhan berada di dalam area gambar (bukan di area kosong)
         touch_local_x = touch.x - image_widget.x
         touch_local_y = touch.y - image_widget.y
-        
-        if not (offset_x <= touch_local_x < offset_x + displayed_w and
-                offset_y <= touch_local_y < offset_y + displayed_h):
-            print("INFO: Sentuhan di luar area peta.")
-            return
 
-        # 3. Tempatkan 'X' secara visual TEPAT di posisi sentuhan
-        marker_layout.clear_widgets()
-        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        # Gunakan `touch.pos` (koordinat global window) yang dikonversi ke sistem koordinat `marker_layout`
-        marker.center = marker_layout.to_local(*touch.pos)
-        marker_layout.add_widget(marker)
-        
-        # 4. Hitung koordinat piksel yang akurat untuk dikirim ke ROS
         touch_on_image_x = touch_local_x - offset_x
         touch_on_image_y = touch_local_y - offset_y
 
@@ -267,9 +259,10 @@ ScreenManager:
         
         screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
         
-        # 5. Aktifkan UI
+        # 3. Aktifkan UI
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
+
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
@@ -286,9 +279,11 @@ ScreenManager:
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
         self.root.current = 'controller'
+
     def exit_controller_mode(self):
         self.manager.stop_controller()
         self.root.current = 'main_menu'
+
     def go_to_mapping_mode(self, map_name):
         if not map_name.strip():
             self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
@@ -296,24 +291,31 @@ ScreenManager:
         status = self.manager.start_mapping(map_name)
         self.root.current = 'mapping'
         Clock.schedule_once(lambda dt: self.update_mapping_labels(status, map_name), 0.1)
+
     def update_mapping_labels(self, status, map_name):
         screen = self.root.get_screen('mapping')
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
+
     def exit_mapping_mode(self):
-        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\nMohon tunggu.')
+        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
         Clock.schedule_once(self._finish_exit_mapping, 1)
+
     def _finish_exit_mapping(self, dt):
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
+
     def start_navigation_with_map(self, map_name, *args):
         self.manager.start_navigation(map_name)
         self.root.current = 'navigation'
+
     def exit_navigation_mode(self):
         self.manager.stop_navigation()
         self.root.current = 'main_menu'
+
     def on_stop(self):
         self.manager.shutdown()
+
     @mainthread
     def update_status_label(self, screen_name, label_id, new_text):
         if self.root:
