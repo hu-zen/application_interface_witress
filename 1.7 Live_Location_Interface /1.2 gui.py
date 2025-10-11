@@ -107,8 +107,7 @@ class NavigationScreen(Screen):
         
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
-        origin_x = meta.get('origin', [0,0,0])[0]
-        origin_y = meta.get('origin', [0,0,0])[1]
+        origin = meta.get('origin', [0,0,0])
 
         norm_w, norm_h = map_viewer.texture.size
         if norm_w == 0 or norm_h == 0: return
@@ -127,21 +126,16 @@ class NavigationScreen(Screen):
             offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
 
-        # === INVERSE LOGIC WITH Y-FLIP ===
+        # === Logika Balik (Inverse Logic) dengan Koreksi Y-Flip ===
         # 1. Konversi posisi ROS (meter) ke koordinat piksel (dengan origin kiri-bawah)
-        pixel_x = (pose['x'] - origin_x) / resolution
-        pixel_y = (pose['y'] - origin_y) / resolution
+        pixel_x = (pose['x'] - origin[0]) / resolution
+        pixel_y = (pose['y'] - origin[1]) / resolution
         
-        # 2. Balik (Flip) Sumbu Y untuk mencocokkan sistem koordinat gambar (kiri-atas)
-        flipped_pixel_y = norm_h - pixel_y
-        
-        # 3. Konversi koordinat piksel (dari kiri-atas) ke posisi di dalam widget Kivy (dari kiri-bawah)
-        #    Ini adalah kebalikan dari `calculate_ros_goal`
+        # 2. Konversi ke posisi di dalam widget Kivy
         pos_in_widget_x = (pixel_x * scale) + offset_x
-        #    Karena Kivy origin di bawah, kita gunakan (norm_h - flipped_pixel_y) untuk mendapatkan posisi dari bawah
-        pos_in_widget_y = ((norm_h - flipped_pixel_y) * scale) + offset_y
+        pos_in_widget_y = (pixel_y * scale) + offset_y
 
-        # 4. Dapatkan posisi absolut di dalam window
+        # 3. Dapatkan posisi absolut di dalam window
         final_x = pos_in_widget_x + map_viewer.x
         final_y = pos_in_widget_y + map_viewer.y
         
@@ -163,6 +157,7 @@ class MainApp(App):
         PopMatrix
 <MapImage>:
 <NavSelectionScreen>:
+    # ... (tidak ada perubahan di sini, sama seperti sebelumnya) ...
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -219,6 +214,7 @@ class MainApp(App):
                 on_press: app.exit_navigation_mode()
 ScreenManager:
     id: sm
+    # ... (semua screen lain sama seperti sebelumnya) ...
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -312,9 +308,8 @@ ScreenManager:
 
         meta = self.manager.map_metadata
         resolution = meta['resolution']
-        origin_x = meta['origin'][0]
-        origin_y = meta['origin'][1]
-        
+        origin = meta['origin']
+
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
@@ -333,22 +328,35 @@ ScreenManager:
         
         if scale == 0: return
 
-        # Menggunakan touch.pos yang merupakan koordinat lokal ke MapImage
+        # Kalkulasi ini menggunakan `touch.pos` (lokal) dan `offset` dari logika Anda
         touch_on_image_x = touch.pos[0] - offset_x
         touch_on_image_y = touch.pos[1] - offset_y
         
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
         
-        # === KOREKSI UTAMA: BALIK (FLIP) SUMBU Y ===
-        # Koordinat piksel Kivy (pixel_y) dihitung dari bawah.
-        # ROS menafsirkan peta dari origin (kiri-bawah) tapi file gambar itu sendiri
-        # dibaca dari kiri-atas. Maka, kita perlu membalik Y relatif terhadap tinggi gambar.
-        flipped_pixel_y = norm_h - pixel_y
+        # Periksa apakah klik berada di luar area gambar yang sebenarnya (di area padding)
+        if not (0 <= pixel_x <= norm_w and 0 <= pixel_y <= norm_h):
+             print("Klik di luar area peta, goal diabaikan.")
+             screen.ids.navigation_status_label.text = "Status: Klik di luar peta!"
+             screen.ids.navigate_button.disabled = True
+             # Hapus marker jika klik tidak valid
+             if image_widget.marker and image_widget.marker.parent:
+                 image_widget.remove_widget(image_widget.marker)
+                 image_widget.marker = None
+             return
 
-        # Konversi piksel yang sudah dikoreksi ke koordinat dunia ROS (meter)
-        map_x = (pixel_x * resolution) + origin_x
-        map_y = (flipped_pixel_y * resolution) + origin_y
+        # ==================================================================
+        # ======================= KOREKSI UTAMA ==========================
+        # ==================================================================
+        # Balik (Flip) Sumbu Y. Kivy Y=0 ada di bawah, tapi PGM Y=0 ada di atas.
+        # map_server secara internal melakukan flip ini saat memuat peta.
+        # Kita harus melakukan hal yang sama pada kalkulasi kita.
+        flipped_pixel_y = norm_h - pixel_y
+        
+        # Gunakan 'flipped_pixel_y' untuk menghitung map_y
+        map_x = (pixel_x * resolution) + origin[0]
+        map_y = (flipped_pixel_y * resolution) + origin[1]
         
         screen.selected_goal_coords = (map_x, map_y)
         
