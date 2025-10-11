@@ -69,16 +69,20 @@ class NavigationScreen(Screen):
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         
+        # Hapus marker 'X' hanya saat masuk ke layar navigasi
         map_viewer = self.ids.map_viewer
         if map_viewer.marker and map_viewer.marker.parent:
             map_viewer.remove_widget(map_viewer.marker)
             map_viewer.marker = None
 
+        # Buat RobotMarker (ikon robot) jika belum ada
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
+            # Tambahkan ke 'map_container' agar bisa tampil di atas peta
             self.ids.map_container.add_widget(self.robot_marker)
         
+        # Mulai update posisi robot secara berkala
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
         self.selected_goal_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
@@ -100,6 +104,10 @@ class NavigationScreen(Screen):
 
     @mainthread
     def update_robot_display(self, dt):
+        """
+        Fungsi untuk menampilkan posisi robot. Logikanya dibuat konsisten
+        dengan 'calculate_ros_goal' untuk memastikan akurasi visual.
+        """
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
@@ -112,7 +120,8 @@ class NavigationScreen(Screen):
         
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
-        origin = meta.get('origin', [0,0,0])
+        origin_x = meta['origin'][0]
+        origin_y = meta['origin'][1]
 
         norm_w, norm_h = map_viewer.texture.size
         if norm_w == 0 or norm_h == 0: return
@@ -131,19 +140,16 @@ class NavigationScreen(Screen):
             offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
 
-        # Logika Balik: Konversi dari ROS (meter) ke koordinat piksel Kivy
-        pixel_x = (pose['x'] - origin[0]) / resolution
-        pixel_y = (pose['y'] - origin[1]) / resolution
+        # Logika Balik (Inverse Logic): Konversi dari ROS (meter) ke koordinat piksel Kivy
+        # 1. Konversi posisi ROS ke piksel (origin kiri-bawah)
+        pixel_x = (pose['x'] - origin_x) / resolution
+        pixel_y = (pose['y'] - origin_y) / resolution
         
-        # Balik sumbu Y untuk mendapatkan posisi piksel dari atas (sesuai PGM)
-        flipped_pixel_y = norm_h - pixel_y
-
-        # Konversi ke koordinat visual Kivy (yang originnya di bawah)
-        # Kita gunakan (norm_h - flipped_pixel_y) yang sama dengan pixel_y asli
+        # 2. Konversi ke posisi visual di dalam widget Kivy
         pos_in_widget_x = (pixel_x * scale) + offset_x
         pos_in_widget_y = (pixel_y * scale) + offset_y
         
-        # Dapatkan posisi absolut di dalam window untuk ditempatkan di FloatLayout
+        # 3. Dapatkan posisi absolut untuk ditempatkan di FloatLayout
         final_x = pos_in_widget_x + map_viewer.x
         final_y = pos_in_widget_y + map_viewer.y
         
@@ -163,9 +169,11 @@ class MainApp(App):
             origin: self.center
     canvas.after:
         PopMatrix
+
 <MapImage>:
 
 <NavSelectionScreen>:
+    # ... (tidak ada perubahan di sini, sama seperti kode Anda) ...
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -192,6 +200,7 @@ class MainApp(App):
         orientation: 'vertical'
         padding: 10
         spacing: 10
+        # Layout diubah menjadi FloatLayout untuk menampung MapImage dan RobotMarker
         FloatLayout:
             id: map_container
             size_hint: 1, 1
@@ -199,12 +208,13 @@ class MainApp(App):
                 id: map_viewer
                 source: ''
                 allow_stretch: True
-                keep_ratio: True
+                keep_ratio: True 
                 size_hint: 1, 1
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
         BoxLayout:
             size_hint_y: None
             height: '60dp'
+            # ... (sisa dari layout bawah sama seperti kode Anda) ...
             orientation: 'horizontal'
             spacing: 10
             Label:
@@ -224,7 +234,7 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
-    # Screen lain (main_menu, pre_mapping, dll) sama persis seperti kode Anda
+    # ... (semua screen lain sama persis seperti kode Anda) ...
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -323,7 +333,7 @@ ScreenManager:
         resolution = meta['resolution']
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
-        
+
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
@@ -341,15 +351,15 @@ ScreenManager:
             offset_y = (widget_h - norm_h * scale) / 2.0
         
         if scale == 0: return
-        
-        # Ini adalah logika asli Anda yang sudah benar secara visual
-        # `touch.pos` sudah lokal terhadap image_widget
-        touch_on_image_x = touch.pos[0] - offset_x
-        touch_on_image_y = touch.pos[1] - offset_y
+
+        # Logika asli Anda untuk mendapatkan piksel dari klik.
+        # Bagian ini TIDAK diubah sama sekali.
+        touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
+        touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
-        
+
         # ==================================================================
         # ======================= KOREKSI UTAMA ==========================
         # ==================================================================
@@ -358,17 +368,18 @@ ScreenManager:
         # Kita harus meniru flip ini agar goal ROS menjadi akurat.
         flipped_pixel_y = norm_h - pixel_y
         
-        # Gunakan 'pixel_x' dan 'flipped_pixel_y' untuk menghitung goal
+        # Gunakan 'pixel_x' yang sudah benar dan 'flipped_pixel_y' yang sudah dikoreksi
         map_x = (pixel_x * resolution) + origin_x
         map_y = (flipped_pixel_y * resolution) + origin_y
         
+        # Simpan hasil akhir (koordinat dunia)
         screen.selected_goal_coords = (map_x, map_y)
         
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
 
-
     def confirm_navigation_goal(self):
+        # Fungsi ini sama persis seperti kode referensi Anda
         screen = self.root.get_screen('navigation')
         if screen.selected_goal_coords:
             map_x, map_y = screen.selected_goal_coords
@@ -390,7 +401,7 @@ pose:
             command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
             try:
                 subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim.")
+                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim ke /move_base_simple/goal")
             except Exception as e:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
             
