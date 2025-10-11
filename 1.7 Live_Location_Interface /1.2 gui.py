@@ -38,8 +38,8 @@ class NavSelectionScreen(Screen):
 
 class MapImage(TouchRippleBehavior, Image):
     """
-    Kelas ini menggunakan logika on_touch_down Anda yang sudah benar
-    untuk penempatan visual marker 'X'. Tidak ada yang diubah di sini.
+    Kelas ini menggunakan logika on_touch_down dari referensi Anda.
+    Tidak ada yang diubah sama sekali.
     """
     marker = ObjectProperty(None, allownone=True)
 
@@ -100,6 +100,10 @@ class NavigationScreen(Screen):
 
     @mainthread
     def update_robot_display(self, dt):
+        """
+        Fungsi ini sekarang 100% merupakan kebalikan matematis dari
+        fungsi calculate_ros_goal referensi Anda.
+        """
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
@@ -132,22 +136,16 @@ class NavigationScreen(Screen):
             offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
 
-        # Logika Balik (Inverse Logic) untuk menampilkan posisi robot
-        pixel_x_from_ros = (pose['x'] - origin_x) / resolution
-        pixel_y_from_ros = (pose['y'] - origin_y) / resolution
-        
-        # Balik sumbu Y untuk mendapatkan posisi piksel dari atas (sesuai PGM)
-        flipped_pixel_y = norm_h - pixel_y_from_ros
+        # === INVERSE LOGIC ===
+        # 1. Konversi posisi ROS (meter) ke koordinat piksel
+        pixel_x = (pose['x'] - origin_x) / resolution
+        pixel_y = (pose['y'] - origin_y) / resolution
 
-        # Konversi ke koordinat visual Kivy (yang originnya di bawah)
-        pos_in_widget_x = (pixel_x_from_ros * scale) + offset_x
-        # Gunakan pixel_y_from_ros (dari bawah) untuk posisi visual
-        pos_in_widget_y = (pixel_y_from_ros * scale) + offset_y
+        # 2. Konversi dari piksel ke posisi di dalam widget (termasuk offset)
+        pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
+        pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
         
-        final_x = pos_in_widget_x + map_viewer.x
-        final_y = pos_in_widget_y + map_viewer.y
-        
-        self.robot_marker.center = (final_x, final_y)
+        self.robot_marker.center = (pos_in_widget_x, pos_in_widget_y)
         self.robot_marker.angle = -math.degrees(pose['yaw'])
 
 class MainApp(App):
@@ -307,6 +305,10 @@ ScreenManager:
         return Builder.load_string(kv_design)
 
     def calculate_ros_goal(self, touch, image_widget):
+        """
+        Fungsi ini 100% menggunakan logika dari file referensi Anda yang akurat.
+        Tidak ada perubahan sama sekali.
+        """
         screen = self.root.get_screen('navigation')
         
         if not image_widget.texture or not self.manager.map_metadata:
@@ -316,7 +318,7 @@ ScreenManager:
         resolution = meta['resolution']
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
-        
+
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
@@ -334,28 +336,19 @@ ScreenManager:
             offset_y = (widget_h - norm_h * scale) / 2.0
         
         if scale == 0: return
-        
-        # ==================================================================
-        # ======================= KOREKSI UTAMA #1 =========================
-        # ==================================================================
-        # Dihapus: - image_widget.x dan - image_widget.y
-        # Alasan: `touch.pos` sudah lokal terhadap image_widget, sehingga
-        # pengurangan ini menyebabkan error offset.
-        touch_on_image_x = touch.pos[0] - offset_x
-        touch_on_image_y = touch.pos[1] - offset_y
+
+        # Kalkulasi ini menggunakan `touch.pos` (lokal) dan `offset` dari logika Anda
+        # Pengurangan `image_widget.x` dan `image_widget.y` tetap dipertahankan
+        # sesuai referensi akurat Anda.
+        touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
+        touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
         
-        # ==================================================================
-        # ======================= KOREKSI UTAMA #2 =========================
-        # ==================================================================
-        # Balik (Flip) Sumbu Y untuk mencocokkan logika ROS map_server
-        flipped_pixel_y = norm_h - pixel_y
-        
-        # Gunakan 'pixel_x' dan 'flipped_pixel_y' untuk menghitung goal
+        # Konversi piksel ke koordinat dunia ROS (meter)
         map_x = (pixel_x * resolution) + origin_x
-        map_y = (flipped_pixel_y * resolution) + origin_y
+        map_y = (pixel_y * resolution) + origin_y
         
         screen.selected_goal_coords = (map_x, map_y)
         
