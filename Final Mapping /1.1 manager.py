@@ -43,7 +43,6 @@ class RosPoseListener(threading.Thread):
             # Tunggu sampai event `run` diaktifkan
             self._run_event.wait() 
             
-            # Jika event stop juga aktif, keluar dari loop
             if self._stop_event.is_set():
                 break
 
@@ -60,15 +59,15 @@ class RosPoseListener(threading.Thread):
         print("INFO: Thread listener posisi robot dihentikan.")
 
     def start_listening(self):
-        self._run_event.set() # Aktifkan loop
+        self._run_event.set()
 
     def stop_listening(self):
-        self._run_event.clear() # Jeda loop
+        self._run_event.clear()
         self.robot_pose = None
 
     def stop_thread(self):
         self._stop_event.set()
-        self._run_event.set() # Pastikan thread tidak terjebak di `wait()`
+        self._run_event.set()
 
     def get_pose(self):
         return self.robot_pose
@@ -93,7 +92,7 @@ class RosManager:
 
         self.pose_listener = None
         
-        self.start_roscore()
+        # self.start_roscore() # <-- INI BARIS YANG SALAH DAN SUDAH DIHAPUS
         self._init_ros_node() # Inisialisasi node ROS sekali di awal
         print("INFO: RosManager siap.")
 
@@ -105,7 +104,6 @@ class RosManager:
             subprocess.check_output(["pidof", "roscore"])
             rospy.init_node('kivy_tf_listener', anonymous=True, disable_signals=True)
             print("INFO: Node ROS 'kivy_tf_listener' berhasil diinisialisasi.")
-            # Buat thread listener sekarang, tapi jangan mulai loop-nya
             self.pose_listener = RosPoseListener()
             self.pose_listener.start()
         except (rospy.ROSInitException, subprocess.CalledProcessError) as e:
@@ -138,10 +136,9 @@ class RosManager:
                 self.is_navigation_running = True
                 self.start_controller()
 
-                # "Bangunkan" thread listener
                 if self.pose_listener:
                     print("INFO: Mengaktifkan listener posisi robot.")
-                    time.sleep(5)  # Beri waktu agar node ROS lain (seperti AMCL) siap
+                    time.sleep(5)
                     self.pose_listener.start_listening()
                 
                 print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
@@ -153,7 +150,6 @@ class RosManager:
         
     def stop_navigation(self):
         if self.is_navigation_running:
-            # "Tidurkan" thread listener
             if self.pose_listener:
                 print("INFO: Menjeda listener posisi robot.")
                 self.pose_listener.stop_listening()
@@ -172,7 +168,6 @@ class RosManager:
         self.stop_controller() 
         if self.roscore_process:
             self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
-        # Hentikan thread listener secara permanen
         if self.pose_listener:
             self.pose_listener.stop_thread()
             self.pose_listener.join()
