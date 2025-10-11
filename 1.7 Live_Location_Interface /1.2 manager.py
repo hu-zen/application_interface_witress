@@ -100,6 +100,7 @@ class RosManager:
     def _init_ros_node(self):
         if not rospy: return
         try:
+            # Inisialisasi node setelah memastikan roscore ada
             rospy.init_node('kivy_ros_manager', anonymous=True, disable_signals=True)
             self.pose_listener = RosPoseListener()
             self.pose_listener.start()
@@ -187,11 +188,6 @@ class RosManager:
         if self.pose_listener:
             return self.pose_listener.get_pose()
         return None
-
-    def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
-        # Fungsi ini sekarang digantikan oleh logika baru di gui.py
-        # tapi tetap dipertahankan untuk referensi
-        pass
 
     # --- Sisa fungsi tidak perlu diubah ---
     def start_controller(self):
