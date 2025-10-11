@@ -15,6 +15,7 @@ from kivy.uix.widget import Widget
 import yaml
 import math
 import os
+import subprocess  # <-- INI BARIS YANG HILANG DAN SUDAH DITAMBAHKAN
 
 from manager import RosManager
 
@@ -119,6 +120,7 @@ class NavigationScreen(Screen):
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
         
+        # Guard clause yang lebih kokoh
         if pose is None or app.manager.map_metadata is None or not map_viewer.texture:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
@@ -132,7 +134,7 @@ class NavigationScreen(Screen):
         origin_x = meta.get('origin', [0,0,0])[0]
         origin_y = meta.get('origin', [0,0,0])[1]
 
-        if resolution == 0: return
+        if resolution == 0: return # Mencegah ZeroDivisionError
 
         # 1. Konversi posisi ROS (meter) ke koordinat piksel pada gambar asli
         pixel_x = (pose['x'] - origin_x) / resolution
@@ -146,6 +148,7 @@ class NavigationScreen(Screen):
         scale_x = map_viewer.width / norm_w
         scale_y = map_viewer.height / norm_h
         scale = min(scale_x, scale_y)
+        if scale == 0: return
         
         scaled_w = norm_w * scale
         scaled_h = norm_h * scale
@@ -154,10 +157,6 @@ class NavigationScreen(Screen):
         offset_y = (map_viewer.height - scaled_h) / 2
 
         # 4. Konversi koordinat piksel peta ke posisi akhir di layar
-        #    - Balik sumbu Y: `norm_h - pixel_y`
-        #    - Terapkan skala: `* scale`
-        #    - Tambahkan offset (garis hitam): `+ offset_`
-        #    - Tambahkan posisi widget itu sendiri: `+ map_viewer.pos`
         final_x = (pixel_x * scale) + offset_x + map_viewer.x
         final_y = ((norm_h - pixel_y) * scale) + offset_y + map_viewer.y
 
@@ -175,8 +174,8 @@ class MainApp(App):
             print("FATAL: roscore tidak berjalan. Mohon jalankan 'roscore' di terminal lain terlebih dahulu.")
             print("="*50)
             # Opsional: langsung keluar jika roscore tidak ada
-            # import sys
-            # sys.exit(1)
+            import sys
+            sys.exit(1)
 
         self.manager = RosManager(status_callback=self.update_status_label)
         
