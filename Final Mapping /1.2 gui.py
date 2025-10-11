@@ -10,11 +10,8 @@ from kivy.clock import mainthread, Clock
 from functools import partial
 from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior
-from kivy.properties import ObjectProperty, NumericProperty
-from kivy.uix.widget import Widget
+from kivy.properties import ObjectProperty
 import yaml
-import math
-import os
 
 from manager import RosManager
 
@@ -41,56 +38,36 @@ class MapImage(TouchRippleBehavior, Image):
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
             if self.marker and self.marker.parent:
-                self.parent.remove_widget(self.marker)
+                self.remove_widget(self.marker)
 
+            # Bagian visual ini sudah benar, posisi X akan selalu pas.
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-            # Menggunakan koordinat sentuhan relatif terhadap parent (RelativeLayout)
             new_marker.center = touch.pos
-            self.parent.add_widget(new_marker)
+            self.add_widget(new_marker)
             self.marker = new_marker
 
+            # Panggil fungsi kalkulasi yang baru
             App.get_running_app().calculate_ros_goal(touch, self)
+
             return super().on_touch_down(touch)
         return False
 
-# Widget untuk merepresentasikan robot, menggunakan gambar jika ada
-class RobotMarker(Image):
-    rotation = NumericProperty(0) # Properti untuk rotasi
-
 class NavigationScreen(Screen):
-    selected_pixel_coords = None
-    robot_marker = ObjectProperty(None, allownone=True)
+    # Properti ini sekarang akan menyimpan koordinat dunia (meter), bukan piksel
+    selected_goal_coords = None
 
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         
-        # Bersihkan penanda 'X'
         map_viewer = self.ids.map_viewer
         if map_viewer.marker and map_viewer.marker.parent:
-            map_viewer.marker.parent.remove_widget(map_viewer.marker)
+            map_viewer.remove_widget(map_viewer.marker)
             map_viewer.marker = None
 
-        # Buat marker robot jika belum ada
-        if not self.robot_marker:
-            icon_path = 'robot_arrow.png'
-            source = icon_path if os.path.exists(icon_path) else 'atlas://data/images/defaulttheme/tree_closed'
-            self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True)
-            self.robot_marker.opacity = 0 # Sembunyikan dulu
-            self.ids.map_container.add_widget(self.robot_marker)
-
-        # Mulai timer untuk update posisi robot
-        self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
-
-        self.selected_pixel_coords = None
+        self.selected_goal_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
-
-    def on_leave(self):
-        if hasattr(self, 'update_event'):
-            self.update_event.cancel()
-        if self.robot_marker:
-            self.robot_marker.opacity = 0 # Sembunyikan saat keluar
 
     def load_map_image(self, map_name):
         if map_name:
@@ -100,71 +77,14 @@ class NavigationScreen(Screen):
                 self.ids.map_viewer.source = map_image_path
                 app.manager.load_map_metadata(map_name)
                 self.ids.map_viewer.reload()
-    
-    @mainthread
-    def update_robot_display(self, dt):
-        app = App.get_running_app()
-        pose = app.manager.get_robot_pose()
-        map_viewer = self.ids.map_viewer
-        
-        # Guard clause yang lebih kokoh
-        if pose is None or app.manager.map_metadata is None or not map_viewer.texture:
-            if self.robot_marker: self.robot_marker.opacity = 0
-            return
-        
-        if self.robot_marker.opacity == 0:
-            self.robot_marker.opacity = 1
-        
-        # --- Logika Konversi dari Dunia Nyata (ROS) ke Piksel (Kivy) ---
-        meta = app.manager.map_metadata
-        resolution = meta.get('resolution', 0.05)
-        origin_x = meta.get('origin', [0,0,0])[0]
-        origin_y = meta.get('origin', [0,0,0])[1]
-
-        if resolution == 0: return # Mencegah ZeroDivisionError
-
-        pixel_x = (pose['x'] - origin_x) / resolution
-        pixel_y = (pose['y'] - origin_y) / resolution
-
-        # Dapatkan ukuran dan posisi aktual gambar di dalam widget
-        norm_w, norm_h = map_viewer.texture.size
-        
-        # Hitung skala dan offset "black bars"
-        scale_x = map_viewer.width / norm_w
-        scale_y = map_viewer.height / norm_h
-        scale = min(scale_x, scale_y)
-        
-        scaled_w = norm_w * scale
-        scaled_h = norm_h * scale
-        offset_x = (map_viewer.width - scaled_w) / 2
-        offset_y = (map_viewer.height - scaled_h) / 2
-
-        # Konversi koordinat piksel peta ke posisi di dalam widget
-        final_x = (pixel_x * scale) + offset_x + map_viewer.x
-        final_y = ( (norm_h - pixel_y) * scale) + offset_y + map_viewer.y
-
-        self.robot_marker.center = (final_x, final_y)
-        
-        # Update rotasi (dengan transformasi dari Kivy canvas)
-        angle_deg = math.degrees(pose['yaw'])
-        self.robot_marker.rotation = angle_deg
 
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-<RobotMarker>:
-    canvas.before:
-        PushMatrix
-        Rotate:
-            angle: self.rotation
-            origin: self.center
-    canvas.after:
-        PopMatrix
-
+# Desain KV tidak berubah dari versi stabil Anda
 <NavSelectionScreen>:
-    # ... (tidak berubah)
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -191,15 +111,12 @@ class MainApp(App):
         orientation: 'vertical'
         padding: 10
         spacing: 10
-        RelativeLayout:
-            id: map_container
-            MapImage:
-                id: map_viewer
-                source: ''
-                allow_stretch: True
-                keep_ratio: True 
-                size_hint: 1, 1
-                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+        MapImage:
+            id: map_viewer
+            source: ''
+            allow_stretch: True
+            keep_ratio: True 
+            size_hint: 1, 1
         BoxLayout:
             size_hint_y: None
             height: '60dp'
@@ -308,50 +225,101 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
+    # ==================================================================
+    # ==================== LOGIKA KALKULASI BARU =======================
+    # ==================================================================
     def calculate_ros_goal(self, touch, image_widget):
+        """Menghitung koordinat dunia (meter) secara langsung dari klik Kivy."""
         screen = self.root.get_screen('navigation')
         
-        if not image_widget.texture: return
+        # 1. Periksa apakah semua data yang dibutuhkan sudah siap
+        if not image_widget.texture or not self.manager.map_metadata:
+            return
+
+        # 2. Ambil metadata peta dari manager
+        meta = self.manager.map_metadata
+        resolution = meta['resolution']
+        origin_x = meta['origin'][0]
+        origin_y = meta['origin'][1]
+
+        # 3. Dapatkan ukuran asli gambar (tekstur)
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
-        # Hitung skala dan offset
-        scale_x = image_widget.width / norm_w
-        scale_y = image_widget.height / norm_h
-        scale = min(scale_x, scale_y)
-        
-        scaled_w = norm_w * scale
-        scaled_h = norm_h * scale
-        offset_x = (image_widget.width - scaled_w) / 2
-        offset_y = (image_widget.height - scaled_h) / 2
+        # 4. Hitung skala dan offset (garis hitam) gambar di dalam widget Kivy
+        widget_w, widget_h = image_widget.size
+        img_ratio = norm_w / norm_h
+        widget_ratio = widget_w / widget_h
 
-        # Koordinat sentuhan relatif terhadap widget gambar
-        touch_local_x = touch.x - image_widget.x
-        touch_local_y = touch.y - image_widget.y
+        if widget_ratio > img_ratio: # Garis hitam di kanan-kiri
+            scale = widget_h / norm_h
+            offset_x = (widget_w - norm_w * scale) / 2.0
+            offset_y = 0.0
+        else: # Garis hitam di atas-bawah
+            scale = widget_w / norm_w
+            offset_x = 0.0
+            offset_y = (widget_h - norm_h * scale) / 2.0
         
-        # Konversi ke koordinat piksel pada gambar asli
         if scale == 0: return
-        pixel_x_for_ros = (touch_local_x - offset_x) / scale
-        pixel_y_for_ros = (touch_local_y - offset_y) / scale
+
+        # 5. Konversi koordinat sentuhan Kivy ke koordinat piksel pada gambar asli
+        #    - `touch.pos` adalah posisi klik dari pojok kiri-bawah widget
+        #    - Kurangi posisi widget dan offset untuk mendapatkan posisi pada gambar yang diskalakan
+        touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
+        touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
-        screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
+        #    - Bagi dengan skala untuk mendapatkan piksel asli
+        pixel_x = touch_on_image_x / scale
+        pixel_y = touch_on_image_y / scale # Ini masih dari bawah
+
+        # 6. Konversi koordinat piksel ke koordinat dunia ROS (meter)
+        #    - map_x: (jumlah piksel dari kiri * resolusi) + offset origin x
+        #    - map_y: (jumlah piksel dari bawah * resolusi) + offset origin y
+        map_x = (pixel_x * resolution) + origin_x
+        map_y = (pixel_y * resolution) + origin_y
         
+        # 7. Simpan hasil akhir (koordinat dunia)
+        screen.selected_goal_coords = (map_x, map_y)
+        
+        # 8. Aktifkan UI
         screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
+        screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
-        if screen.selected_pixel_coords:
-            px, py, w, h = screen.selected_pixel_coords
-            self.manager.send_goal_from_pixel(px, py, w, h)
-            screen.ids.navigate_button.disabled = True
+        if screen.selected_goal_coords:
+            map_x, map_y = screen.selected_goal_coords
             
+            # Buat pesan goal dalam format YAML
+            goal_msg_yaml = f"""header:
+  stamp: now
+  frame_id: "map"
+pose:
+  position:
+    x: {map_x}
+    y: {map_y}
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    w: 1.0"""
+
+            # Bentuk dan kirim perintah rostopic
+            command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
+            try:
+                subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim ke /move_base_simple/goal")
+            except Exception as e:
+                print(f"ERROR: Gagal mengirim perintah goal: {e}")
+
+            # Bersihkan UI
+            screen.ids.navigate_button.disabled = True
             map_viewer = screen.ids.map_viewer
             if map_viewer.marker and map_viewer.marker.parent:
-                map_viewer.marker.parent.remove_widget(map_viewer.marker)
+                map_viewer.remove_widget(map_viewer.marker)
                 map_viewer.marker = None
-
-            screen.selected_pixel_coords = None
+            screen.selected_goal_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
     # --- Sisa fungsi tidak perlu diubah ---
