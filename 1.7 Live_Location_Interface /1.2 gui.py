@@ -135,15 +135,13 @@ class NavigationScreen(Screen):
         origin_x = meta.get('origin', [0,0,0])[0]
         origin_y = meta.get('origin', [0,0,0])[1]
 
-        # Konversi posisi ROS (meter) ke koordinat piksel pada gambar asli
-        pixel_x = (pose['x'] - origin_x) / resolution
-        pixel_y = ((pose['y'] - origin_y) / resolution)
+        pixel_x_on_map = (pose['x'] - origin_x) / resolution
+        pixel_y_on_map = (pose['y'] - origin_y) / resolution
 
-        # Balik sumbu Y untuk sistem koordinat Kivy
-        pixel_y_kivy = self.texture_size[1] - pixel_y
+        # Balik sumbu Y untuk sistem koordinat Kivy (dari atas-bawah menjadi bawah-atas)
+        pixel_y_kivy = self.texture_size[1] - pixel_y_on_map
         
-        # Konversi ke posisi di dalam widget Kivy
-        final_x = (pixel_x * self.map_scale) + self.map_offset[0] + map_viewer.x
+        final_x = (pixel_x_on_map * self.map_scale) + self.map_offset[0] + map_viewer.x
         final_y = (pixel_y_kivy * self.map_scale) + self.map_offset[1] + map_viewer.y
 
         self.robot_marker.center = (final_x, final_y)
@@ -224,6 +222,7 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
+    # Sisa dari ScreenManager tidak berubah
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -245,7 +244,40 @@ ScreenManager:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
                 on_press: sm.current = 'nav_selection'
-    # ... Sisa KV design tetap sama
+    Screen:
+        name: 'pre_mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Masukkan Nama Peta'
+                font_size: '26sp'
+            TextInput:
+                id: map_name_input
+                hint_text: 'Contoh: peta_lantai_1'
+                font_size: '20sp'
+                multiline: False
+                size_hint_y: None
+                height: '48dp'
+            Button:
+                text: 'Mulai Mapping'
+                font_size: '22sp'
+                on_press: app.go_to_mapping_mode(map_name_input.text)
+            Button:
+                text: 'Kembali ke Menu'
+                font_size: '22sp'
+                on_press: sm.current = 'main_menu'
+    Screen:
+        name: 'controller'
+        # ...
+    Screen:
+        name: 'mapping'
+        # ...
+    NavSelectionScreen:
+        name: 'nav_selection'
+    NavigationScreen:
+        name: 'navigation'
 """
         return Builder.load_string(kv_design)
 
@@ -259,12 +291,16 @@ ScreenManager:
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
         
+        # Hitung posisi klik relatif terhadap gambar yang diskalakan
         touch_on_image_x = touch.pos[0] - image_widget.x - screen.map_offset[0]
         touch_on_image_y = touch.pos[1] - image_widget.y - screen.map_offset[1]
         
+        # Konversi ke koordinat piksel pada gambar asli
         pixel_x = touch_on_image_x / screen.map_scale
-        pixel_y = (screen.texture_size[1] * screen.map_scale - touch_on_image_y) / screen.map_scale
+        # Balik sumbu Y saat mengkonversi dari Kivy ke sistem koordinat peta
+        pixel_y = screen.texture_size[1] - (touch_on_image_y / screen.map_scale)
         
+        # Konversi piksel ke koordinat dunia ROS (meter)
         map_x = (pixel_x * resolution) + origin_x
         map_y = (pixel_y * resolution) + origin_y
         
