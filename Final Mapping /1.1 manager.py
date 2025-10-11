@@ -173,8 +173,8 @@ class RosManager:
         origin_x = self.map_metadata['origin'][0]
         origin_y = self.map_metadata['origin'][1]
         
-        # Logika konversi piksel ke ROS tidak berubah
-        pixel_y_reversed = image_height - touch_y
+        # Logika ini sudah benar karena mengasumsikan Y dihitung dari atas (top-down)
+        pixel_y_reversed = image_height - touch_y 
         map_x = (touch_x * resolution) + origin_x
         map_y = (pixel_y_reversed * resolution) + origin_y
         
