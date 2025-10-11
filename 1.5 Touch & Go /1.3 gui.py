@@ -10,6 +10,7 @@ from kivy.clock import mainthread, Clock
 from functools import partial
 from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior
+from kivy.properties import ObjectProperty
 import yaml
 
 from manager import RosManager
@@ -31,11 +32,35 @@ class NavSelectionScreen(Screen):
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
+# ==================================================================
+# ==================== PERBAIKAN LOGIKA UTAMA ======================
+# ==================================================================
 class MapImage(TouchRippleBehavior, Image):
+    # Properti untuk menyimpan referensi ke penanda 'X'
+    marker = ObjectProperty(None, allownone=True)
+
     def on_touch_down(self, touch):
+        # Memastikan klik berada di dalam area widget
         if self.collide_point(*touch.pos):
-            App.get_running_app().on_map_touch(touch, self)
+            # Hapus penanda 'X' sebelumnya jika ada
+            if self.marker and self.marker.parent:
+                self.remove_widget(self.marker)
+
+            # Buat penanda 'X' yang baru.
+            # Karena logika ini ada di dalam kelas MapImage, `touch.pos`
+            # secara otomatis memberikan koordinat LOKAL di dalam widget ini.
+            # Ini adalah kunci perbaikannya.
+            new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+            new_marker.center = touch.pos
+            self.add_widget(new_marker)
+            self.marker = new_marker
+
+            # Panggil fungsi di App utama untuk menangani logika ROS
+            App.get_running_app().calculate_ros_goal(touch, self)
+
+            # Memproses event sentuhan
             return super().on_touch_down(touch)
+        return False
 
 class NavigationScreen(Screen):
     selected_pixel_coords = None
@@ -45,11 +70,11 @@ class NavigationScreen(Screen):
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         
-        # Hapus penanda 'X' sebelumnya dari map_container
-        map_container = self.ids.map_container
-        widgets_to_remove = [widget for widget in map_container.children if isinstance(widget, Label)]
-        for widget in widgets_to_remove:
-            map_container.remove_widget(widget)
+        # Membersihkan penanda 'X' saat layar navigasi dibuka
+        map_viewer = self.ids.map_viewer
+        if map_viewer.marker and map_viewer.marker.parent:
+            map_viewer.remove_widget(map_viewer.marker)
+            map_viewer.marker = None
 
         self.selected_pixel_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
@@ -67,9 +92,7 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
-        # ==================================================================
-        # ==================== PERUBAHAN DESAIN KV =========================
-        # ==================================================================
+        # Desain KV tidak lagi memerlukan 'marker_layout'
         kv_design = """
 <NavSelectionScreen>:
     BoxLayout:
@@ -98,17 +121,13 @@ class MainApp(App):
         orientation: 'vertical'
         padding: 10
         spacing: 10
-        FloatLayout:
-            id: map_container
-            MapImage:
-                id: map_viewer
-                source: ''
-                allow_stretch: True
-                keep_ratio: True 
-                size_hint: 1, 1
-                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-            # FloatLayout untuk marker_layout sudah dihapus dari sini
-            # Penanda 'X' akan ditambahkan langsung ke map_container
+        # MapImage sekarang akan menangani penanda 'X' sendiri
+        MapImage:
+            id: map_viewer
+            source: ''
+            allow_stretch: True
+            keep_ratio: True 
+            size_hint: 1, 1
         BoxLayout:
             size_hint_y: None
             height: '60dp'
@@ -216,33 +235,19 @@ ScreenManager:
 """
         return Builder.load_string(kv_design)
 
-    # ==================================================================
-    # ==================== PERBAIKAN LOGIKA UTAMA ======================
-    # ==================================================================
-    def on_map_touch(self, touch, image_widget):
+    def calculate_ros_goal(self, touch, image_widget):
+        """Fungsi ini hanya untuk menghitung koordinat ROS, bukan untuk visual."""
         screen = self.root.get_screen('navigation')
-        # Dapatkan container utama, yang merupakan parent dari image_widget
-        map_container = screen.ids.map_container
-
-        # Hapus penanda 'X' (Label) sebelumnya dari container
-        # Ini penting agar tidak menumpuk banyak 'X'
-        widgets_to_remove = [widget for widget in map_container.children if isinstance(widget, Label)]
-        for widget in widgets_to_remove:
-            map_container.remove_widget(widget)
-
-        # 1. Tempatkan penanda 'X' secara visual
-        # `touch.pos` memberikan koordinat di dalam sistem koordinat parent (map_container).
-        # Karena kita menambahkan marker ke map_container, ini akan selalu akurat.
-        marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-        marker.center = touch.pos
-        map_container.add_widget(marker)
         
-        # 2. Hitung koordinat piksel untuk dikirim ke ROS (logika ini tidak berubah)
+        # Koordinat sentuhan sudah bersifat lokal terhadap image_widget
+        touch_local_x, touch_local_y = touch.pos
+
         if not image_widget.texture: return
         widget_w, widget_h = image_widget.size
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
 
+        # Logika kalkulasi untuk ROS tidak berubah, karena sudah benar
         widget_ratio = widget_w / widget_h if widget_h > 0 else 0
         image_ratio = norm_w / norm_h if norm_h > 0 else 0
         if image_ratio == 0: return
@@ -256,22 +261,14 @@ ScreenManager:
             offset_x = 0.0
             offset_y = (widget_h - (norm_h * scale)) / 2.0
         
-        # Konversi dari koordinat parent (map_container) ke lokal widget (MapImage)
-        # image_widget.x adalah posisi widget relatif terhadap parent-nya.
-        touch_local_x = touch.x - image_widget.x
-        touch_local_y = touch.y - image_widget.y
-
-        # Kurangi offset (garis hitam) untuk mendapatkan posisi pada gambar asli
         touch_on_image_x = touch_local_x - offset_x
         touch_on_image_y = touch_local_y - offset_y
 
-        # Ubah skala untuk mendapatkan koordinat piksel final
         pixel_x_for_ros = touch_on_image_x / scale
         pixel_y_for_ros = touch_on_image_y / scale
         
         screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
         
-        # 3. Aktifkan UI
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = "Status: Titik dipilih. Tekan 'Lakukan Navigasi'."
 
@@ -282,11 +279,11 @@ ScreenManager:
             self.manager.send_goal_from_pixel(px, py, w, h)
             screen.ids.navigate_button.disabled = True
             
-            # Hapus penanda 'X' dari map_container setelah goal dikirim
-            map_container = screen.ids.map_container
-            widgets_to_remove = [widget for widget in map_container.children if isinstance(widget, Label)]
-            for widget in widgets_to_remove:
-                map_container.remove_widget(widget)
+            # Hapus penanda 'X' setelah goal dikirim
+            map_viewer = screen.ids.map_viewer
+            if map_viewer.marker and map_viewer.marker.parent:
+                map_viewer.remove_widget(map_viewer.marker)
+                map_viewer.marker = None
 
             screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
