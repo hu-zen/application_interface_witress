@@ -16,23 +16,6 @@ import subprocess
 
 from manager import RosManager
 
-# ==================================================================
-# ============== KELAS-KELAS BARU UNTUK STABILITAS GUI ==============
-# ==================================================================
-# Memberikan kelas Python pada setiap layar membuatnya lebih stabil.
-class MainMenuScreen(Screen):
-    pass
-
-class PreMappingScreen(Screen):
-    pass
-
-class ControllerScreen(Screen):
-    pass
-
-class MappingScreen(Screen):
-    pass
-# ==================================================================
-
 class NavSelectionScreen(Screen):
     def on_enter(self):
         self.update_map_list()
@@ -97,95 +80,8 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-# ==================================================================
-# ================== DESAIN KV DIPERBARUI ==========================
-# ==================================================================
-# Menggunakan nama kelas Python (<MainMenuScreen>:) alih-alih nama generik (<'main_menu'>:).
-
-<MainMenuScreen>:
-    name: 'main_menu'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            text: 'Waiter Bot Control Center'
-            font_size: '30sp'
-        Button:
-            text: 'Mode Controller'
-            font_size: '22sp'
-            on_press: app.go_to_controller_mode()
-        Button:
-            text: 'Mode Mapping'
-            font_size: '22sp'
-            on_press: root.manager.current = 'pre_mapping'
-        Button:
-            text: 'Mode Navigasi'
-            font_size: '22sp'
-            on_press: root.manager.current = 'nav_selection'
-
-<PreMappingScreen>:
-    name: 'pre_mapping'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            text: 'Masukkan Nama Peta'
-            font_size: '26sp'
-        TextInput:
-            id: map_name_input
-            hint_text: 'Contoh: peta_lantai_1'
-            font_size: '20sp'
-            multiline: False
-            size_hint_y: None
-            height: '48dp'
-        Button:
-            text: 'Mulai Mapping'
-            font_size: '22sp'
-            on_press: app.go_to_mapping_mode(map_name_input.text)
-        Button:
-            text: 'Kembali ke Menu'
-            font_size: '22sp'
-            on_press: root.manager.current = 'main_menu'
-
-<ControllerScreen>:
-    name: 'controller'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            id: controller_status_label
-            text: 'Status: Siap'
-            font_size: '20sp'
-        Button:
-            text: 'Stop & Kembali ke Menu'
-            font_size: '22sp'
-            on_press: app.exit_controller_mode()
-
-<MappingScreen>:
-    name: 'mapping'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            id: mapping_status_label
-            text: 'Status: Siap'
-            font_size: '20sp'
-        Label:
-            id: current_map_name_label
-            text: 'Memetakan: '
-            font_size: '18sp'
-            color: 0.7, 0.7, 0.7, 1
-        Button:
-            text: 'Selesai Mapping & Simpan Otomatis'
-            font_size: '22sp'
-            on_press: app.exit_mapping_mode()
-
+# Desain KV tidak berubah dari versi stabil Anda
 <NavSelectionScreen>:
-    name: 'nav_selection'
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -240,12 +136,88 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
-    MainMenuScreen:
-    PreMappingScreen:
-    ControllerScreen:
-    MappingScreen:
+    Screen:
+        name: 'main_menu'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Waiter Bot Control Center'
+                font_size: '30sp'
+            Button:
+                text: 'Mode Controller'
+                font_size: '22sp'
+                on_press: app.go_to_controller_mode()
+            Button:
+                text: 'Mode Mapping'
+                font_size: '22sp'
+                on_press: sm.current = 'pre_mapping'
+            Button:
+                text: 'Mode Navigasi'
+                font_size: '22sp'
+                on_press: sm.current = 'nav_selection'
+    Screen:
+        name: 'pre_mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Masukkan Nama Peta'
+                font_size: '26sp'
+            TextInput:
+                id: map_name_input
+                hint_text: 'Contoh: peta_lantai_1'
+                font_size: '20sp'
+                multiline: False
+                size_hint_y: None
+                height: '48dp'
+            Button:
+                text: 'Mulai Mapping'
+                font_size: '22sp'
+                on_press: app.go_to_mapping_mode(map_name_input.text)
+            Button:
+                text: 'Kembali ke Menu'
+                font_size: '22sp'
+                on_press: sm.current = 'main_menu'
+    Screen:
+        name: 'controller'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: controller_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+            Button:
+                text: 'Stop & Kembali ke Menu'
+                font_size: '22sp'
+                on_press: app.exit_controller_mode()
+    Screen:
+        name: 'mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: mapping_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+            Label:
+                id: current_map_name_label
+                text: 'Memetakan: '
+                font_size: '18sp'
+                color: 0.7, 0.7, 0.7, 1
+            Button:
+                text: 'Selesai Mapping & Simpan Otomatis'
+                font_size: '22sp'
+                on_press: app.exit_mapping_mode()
     NavSelectionScreen:
+        name: 'nav_selection'
     NavigationScreen:
+        name: 'navigation'
 """
         return Builder.load_string(kv_design)
 
@@ -265,8 +237,8 @@ ScreenManager:
         if norm_w == 0 or norm_h == 0: return
 
         widget_w, widget_h = image_widget.size
-        img_ratio = norm_w / norm_h
-        widget_ratio = widget_w / widget_h
+        img_ratio = norm_w / norm_h if norm_h != 0 else 0
+        widget_ratio = widget_w / widget_h if widget_h != 0 else 0
 
         if widget_ratio > img_ratio:
             scale = widget_h / norm_h
@@ -320,6 +292,20 @@ pose:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
 
             screen.ids.navigate_button.disabled = True
+            
+            # ==================================================================
+            # ==================== PERMINTAAN TAMBAHAN ANDA ====================
+            # ==================================================================
+            # Baris kode untuk menghapus marker 'X' telah di-non-aktifkan.
+            # Tanda 'X' akan tetap ada sampai Anda mengklik titik baru.
+            
+            # map_viewer = screen.ids.map_viewer
+            # if map_viewer.marker and map_viewer.marker.parent:
+            #     map_viewer.remove_widget(map_viewer.marker)
+            #     map_viewer.marker = None
+            # ==================================================================
+            
+            # screen.selected_goal_coords = None # Biarkan goal terakhir tersimpan
             screen.ids.navigation_status_label.text = "Status: Goal terkirim. Klik titik lain untuk goal baru."
             
     # --- Sisa fungsi tidak perlu diubah ---
