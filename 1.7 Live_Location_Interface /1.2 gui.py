@@ -62,13 +62,12 @@ class NavigationScreen(Screen):
             self.ids.map_container.add_widget(self.robot_marker)
         
         # ==================================================================
-        # ============== PERBAIKAN LOGIKA KLIK 'X' BAGIAN 1 ================
+        # ============== PERBAIKAN LOGIKA KLIK 'X' (BAGIAN 1) ==============
         # ==================================================================
-        # Buat marker 'X' sekali saja saat layar pertama kali dibuka, lalu sembunyikan.
+        # Buat marker 'X' sekali saja saat layar pertama kali dibuat, lalu sembunyikan.
         if not self.click_marker:
-            self.click_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+            self.click_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True, is_visible=False)
             self.ids.map_container.add_widget(self.click_marker)
-        self.click_marker.opacity = 0 # Selalu sembunyikan saat masuk layar
         # ==================================================================
         
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
@@ -90,7 +89,7 @@ class NavigationScreen(Screen):
         map_viewer = self.ids.map_viewer
         if map_viewer.collide_point(*touch.pos):
             # ==================================================================
-            # ============== PERBAIKAN LOGIKA KLIK 'X' BAGIAN 2 ================
+            # ============== PERBAIKAN LOGIKA KLIK 'X' (BAGIAN 2) ==============
             # ==================================================================
             # Alih-alih membuat/menghapus, kita hanya memindahkan marker yang sudah ada.
             # Ini jauh lebih stabil dan akan selalu berfungsi.
@@ -173,6 +172,7 @@ class MainApp(App):
         PopMatrix
 
 <NavSelectionScreen>:
+    name: 'nav_selection'
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -233,112 +233,88 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
-    # Sisa dari ScreenManager tidak berubah
     Screen:
         name: 'main_menu'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Waiter Bot Control Center'
+                font_size: '30sp'
+            Button:
+                text: 'Mode Controller'
+                font_size: '22sp'
+                on_press: app.go_to_controller_mode()
+            Button:
+                text: 'Mode Mapping'
+                font_size: '22sp'
+                on_press: sm.current = 'pre_mapping'
+            Button:
+                text: 'Mode Navigasi'
+                font_size: '22sp'
+                on_press: sm.current = 'nav_selection'
     Screen:
         name: 'pre_mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                text: 'Masukkan Nama Peta'
+                font_size: '26sp'
+            TextInput:
+                id: map_name_input
+                hint_text: 'Contoh: peta_lantai_1'
+                font_size: '20sp'
+                multiline: False
+                size_hint_y: None
+                height: '48dp'
+            Button:
+                text: 'Mulai Mapping'
+                font_size: '22sp'
+                on_press: app.go_to_mapping_mode(map_name_input.text)
+            Button:
+                text: 'Kembali ke Menu'
+                font_size: '22sp'
+                on_press: sm.current = 'main_menu'
     Screen:
         name: 'controller'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: controller_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+            Button:
+                text: 'Stop & Kembali ke Menu'
+                font_size: '22sp'
+                on_press: app.exit_controller_mode()
     Screen:
         name: 'mapping'
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 40
+            spacing: 20
+            Label:
+                id: mapping_status_label
+                text: 'Status: Siap'
+                font_size: '20sp'
+            Label:
+                id: current_map_name_label
+                text: 'Memetakan: '
+                font_size: '18sp'
+                color: 0.7, 0.7, 0.7, 1
+            Button:
+                text: 'Selesai Mapping & Simpan Otomatis'
+                font_size: '22sp'
+                on_press: app.exit_mapping_mode()
     NavSelectionScreen:
-        name: 'nav_selection'
     NavigationScreen:
-        name: 'navigation'
 """
-        # Load the full KV string
-        full_kv_string = self.get_full_kv_string(kv_design)
-        return Builder.load_string(full_kv_string)
-
-    def get_full_kv_string(self, base_kv):
-        # Helper to avoid code duplication. This builds the full KV string.
-        # This part ensures all your screens are defined, fixing the black screen bug.
-        screens_kv = """
-<MainMenuScreen@Screen>:
-    name: 'main_menu'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            text: 'Waiter Bot Control Center'
-            font_size: '30sp'
-        Button:
-            text: 'Mode Controller'
-            font_size: '22sp'
-            on_press: app.go_to_controller_mode()
-        Button:
-            text: 'Mode Mapping'
-            font_size: '22sp'
-            on_press: root.manager.current = 'pre_mapping'
-        Button:
-            text: 'Mode Navigasi'
-            font_size: '22sp'
-            on_press: root.manager.current = 'nav_selection'
-
-<PreMappingScreen@Screen>:
-    name: 'pre_mapping'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            text: 'Masukkan Nama Peta'
-            font_size: '26sp'
-        TextInput:
-            id: map_name_input
-            hint_text: 'Contoh: peta_lantai_1'
-            font_size: '20sp'
-            multiline: False
-            size_hint_y: None
-            height: '48dp'
-        Button:
-            text: 'Mulai Mapping'
-            font_size: '22sp'
-            on_press: app.go_to_mapping_mode(map_name_input.text)
-        Button:
-            text: 'Kembali ke Menu'
-            font_size: '22sp'
-            on_press: root.manager.current = 'main_menu'
-            
-<ControllerScreen@Screen>:
-    name: 'controller'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            id: controller_status_label
-            text: 'Status: Siap'
-            font_size: '20sp'
-        Button:
-            text: 'Stop & Kembali ke Menu'
-            font_size: '22sp'
-            on_press: app.exit_controller_mode()
-
-<MappingScreen@Screen>:
-    name: 'mapping'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 40
-        spacing: 20
-        Label:
-            id: mapping_status_label
-            text: 'Status: Siap'
-            font_size: '20sp'
-        Label:
-            id: current_map_name_label
-            text: 'Memetakan: '
-            font_size: '18sp'
-            color: 0.7, 0.7, 0.7, 1
-        Button:
-            text: 'Selesai Mapping & Simpan Otomatis'
-            font_size: '22sp'
-            on_press: app.exit_mapping_mode()
-"""
-        # Replace the placeholder in the base_kv string
-        return base_kv.replace("ScreenManager:\n    id: sm\n    # Sisa dari ScreenManager tidak berubah", screens_kv + "\nScreenManager:\n    id: sm")
+        return Builder.load_string(kv_design)
 
     def calculate_ros_goal(self, touch, screen):
         image_widget = screen.ids.map_viewer
@@ -354,11 +330,8 @@ ScreenManager:
         touch_on_image_y = touch.pos[1] - image_widget.y - screen.map_offset[1]
         
         pixel_x = touch_on_image_x / screen.map_scale
-        pixel_y_from_bottom = touch_on_image_y / screen.map_scale
+        pixel_y = screen.texture_size[1] - (touch_on_image_y / screen.map_scale)
         
-        # Balik sumbu Y untuk kalkulasi ROS
-        pixel_y = screen.texture_size[1] - pixel_y_from_bottom
-
         map_x = (pixel_x * resolution) + origin_x
         map_y = (pixel_y * resolution) + origin_y
         
@@ -389,6 +362,7 @@ pose:
             command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
             try:
                 subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim.")
             except Exception as e:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
 
