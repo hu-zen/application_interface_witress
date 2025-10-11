@@ -1,349 +1,276 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# File: manager.py
 
-from kivy.app import App
-from kivy.lang import Builder
-from kivy.uix.screenmanager import Screen
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.clock import mainthread, Clock
-from functools import partial
-from kivy.uix.image import Image
-from kivy.uix.behaviors import TouchRippleBehavior
-from kivy.properties import ObjectProperty, NumericProperty, ListProperty
-import yaml
-import math
-import os
 import subprocess
+import time
+import os
+import signal
+import rospkg
+import glob
+import yaml
+import threading
+import math
 
-from manager import RosManager
+# Coba impor library ROS. Jika gagal, program tetap jalan tanpa fitur real-time.
+try:
+    import rospy
+    import tf
+    from tf.transformations import euler_from_quaternion
+except ImportError:
+    print("PERINGATAN: Pustaka 'rospy' atau 'tf' tidak ditemukan. Fungsionalitas posisi real-time tidak akan bekerja.")
+    rospy = None
+    tf = None
 
-class NavSelectionScreen(Screen):
-    def on_enter(self):
-        self.update_map_list()
+class RosPoseListener(threading.Thread):
+    """Thread yang berjalan di latar belakang untuk mendengarkan posisi robot dari TF."""
+    def __init__(self):
+        super(RosPoseListener, self).__init__()
+        self.daemon = True
+        self.listener = None
+        self.robot_pose = None
+        self._stop_event = threading.Event()
+        self._run_event = threading.Event()  # Event untuk menjeda/melanjutkan loop
 
-    def update_map_list(self):
-        grid = self.ids.nav_map_grid
-        grid.clear_widgets()
-        app = App.get_running_app()
-        map_names = app.manager.get_available_maps()
-        if not map_names:
-            grid.add_widget(Label(text="Tidak ada peta ditemukan."))
-            return
-        for name in map_names:
-            btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
-            btn.bind(on_press=partial(app.start_navigation_with_map, name))
-            grid.add_widget(btn)
-
-class MapImage(TouchRippleBehavior, Image):
-    pass
-
-class RobotMarker(Image):
-    angle = NumericProperty(0)
-
-class NavigationScreen(Screen):
-    selected_goal_coords = None
-    robot_marker = ObjectProperty(None, allownone=True)
-    click_marker = ObjectProperty(None, allownone=True)
-    
-    map_scale = NumericProperty(1.0)
-    map_offset = ListProperty([0, 0])
-    texture_size = ListProperty([0, 0])
-
-    def on_enter(self):
-        app = App.get_running_app()
-        self.load_map_image(app.manager.current_map_name)
-        self.ids.navigate_button.disabled = True
-        self.cleanup_markers()
-
-        if not self.robot_marker:
-            source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
-            self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True)
-            self.ids.map_container.add_widget(self.robot_marker)
-        
-        self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
-        self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
-
-    def on_leave(self):
-        if hasattr(self, 'update_event'):
-            self.update_event.cancel()
-        self.cleanup_markers()
-
-    def cleanup_markers(self):
-        if self.click_marker and self.click_marker.parent:
-            self.ids.map_container.remove_widget(self.click_marker)
-            self.click_marker = None
-        if self.robot_marker:
-            self.robot_marker.opacity = 0
-
-    def on_map_touch(self, touch):
-        map_viewer = self.ids.map_viewer
-        if map_viewer.collide_point(*touch.pos):
-            if self.click_marker and self.click_marker.parent:
-                self.ids.map_container.remove_widget(self.click_marker)
-
-            self.click_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-            self.click_marker.center = touch.pos
-            self.ids.map_container.add_widget(self.click_marker)
-
-            app = App.get_running_app()
-            app.calculate_ros_goal(touch, self)
-
-    def load_map_image(self, map_name):
-        if map_name:
-            app = App.get_running_app()
-            map_image_path = app.manager.get_map_image_path(map_name)
-            if map_image_path:
-                self.ids.map_viewer.source = map_image_path
-                app.manager.load_map_metadata(map_name)
-                self.ids.map_viewer.reload()
-    
-    def recalculate_transform(self, *args):
-        map_viewer = self.ids.map_viewer
-        if not map_viewer.texture: return
-
-        norm_w, norm_h = map_viewer.texture.size
-        self.texture_size = [norm_w, norm_h]
-        if norm_w == 0 or norm_h == 0: return
-
-        scale_x = map_viewer.width / norm_w
-        scale_y = map_viewer.height / norm_h
-        self.map_scale = min(scale_x, scale_y)
-        
-        scaled_w = norm_w * self.map_scale
-        scaled_h = norm_h * self.map_scale
-        
-        self.map_offset = [
-            (map_viewer.width - scaled_w) / 2,
-            (map_viewer.height - scaled_h) / 2
-        ]
-
-    @mainthread
-    def update_robot_display(self, dt):
-        app = App.get_running_app()
-        pose = app.manager.get_robot_pose()
-        map_viewer = self.ids.map_viewer
-        
-        if pose is None or not app.manager.map_metadata or self.map_scale == 0:
-            if self.robot_marker: self.robot_marker.opacity = 0
-            return
-        
-        self.robot_marker.opacity = 1
-        
-        meta = app.manager.map_metadata
-        resolution = meta.get('resolution', 0.05)
-        origin_x = meta.get('origin', [0,0,0])[0]
-        origin_y = meta.get('origin', [0,0,0])[1]
-
-        # Konversi posisi ROS (meter) ke koordinat piksel pada gambar asli
-        pixel_x = (pose['x'] - origin_x) / resolution
-        pixel_y = ((pose['y'] - origin_y) / resolution)
-
-        # Balik sumbu Y untuk sistem koordinat Kivy
-        pixel_y_kivy = self.texture_size[1] - pixel_y
-        
-        # Konversi ke posisi di dalam widget Kivy
-        final_x = (pixel_x * self.map_scale) + self.map_offset[0] + map_viewer.x
-        final_y = (pixel_y_kivy * self.map_scale) + self.map_offset[1] + map_viewer.y
-
-        self.robot_marker.center = (final_x, final_y)
-        self.robot_marker.angle = math.degrees(pose['yaw'])
-
-class MainApp(App):
-    def build(self):
-        self.manager = RosManager(status_callback=self.update_status_label)
-        
-        kv_design = """
-<RobotMarker>:
-    canvas.before:
-        PushMatrix
-        Rotate:
-            angle: self.angle
-            origin: self.center
-    canvas.after:
-        PopMatrix
-
-<NavSelectionScreen>:
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 20
-        spacing: 10
-        Label:
-            text: 'Pilih Peta untuk Navigasi'
-            font_size: '24sp'
-            size_hint_y: 0.15
-        ScrollView:
-            GridLayout:
-                id: nav_map_grid
-                cols: 1
-                size_hint_y: None
-                height: self.minimum_height
-                spacing: 10
-        Button:
-            text: 'Kembali ke Menu'
-            size_hint_y: 0.15
-            on_press: root.manager.current = 'main_menu'
-
-<NavigationScreen>:
-    name: 'navigation'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 10
-        spacing: 10
-        FloatLayout:
-            id: map_container
-            on_touch_down: root.on_map_touch(args[0])
-            MapImage:
-                id: map_viewer
-                source: ''
-                allow_stretch: True
-                keep_ratio: True 
-                size_hint: 1, 1
-                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-                on_size: root.recalculate_transform()
-                on_pos: root.recalculate_transform()
-        BoxLayout:
-            size_hint_y: None
-            height: '60dp'
-            orientation: 'horizontal'
-            spacing: 10
-            Label:
-                id: navigation_status_label
-                text: 'Status: Pilih titik di peta'
-                font_size: '18sp'
-            Button:
-                id: navigate_button
-                text: 'Lakukan Navigasi'
-                font_size: '20sp'
-                disabled: True
-                on_press: app.confirm_navigation_goal()
-            Button:
-                text: 'Stop & Kembali'
-                font_size: '20sp'
-                on_press: app.exit_navigation_mode()
-
-ScreenManager:
-    id: sm
-    Screen:
-        name: 'main_menu'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 20
-            Label:
-                text: 'Waiter Bot Control Center'
-                font_size: '30sp'
-            Button:
-                text: 'Mode Controller'
-                font_size: '22sp'
-                on_press: app.go_to_controller_mode()
-            Button:
-                text: 'Mode Mapping'
-                font_size: '22sp'
-                on_press: sm.current = 'pre_mapping'
-            Button:
-                text: 'Mode Navigasi'
-                font_size: '22sp'
-                on_press: sm.current = 'nav_selection'
-    # ... Sisa KV design tetap sama
-"""
-        return Builder.load_string(kv_design)
-
-    def calculate_ros_goal(self, touch, screen):
-        image_widget = screen.ids.map_viewer
-        if not self.manager.map_metadata or screen.map_scale == 0:
+    def run(self):
+        if not rospy or not tf:
             return
 
-        meta = self.manager.map_metadata
-        resolution = meta['resolution']
-        origin_x = meta['origin'][0]
-        origin_y = meta['origin'][1]
-        
-        touch_on_image_x = touch.pos[0] - image_widget.x - screen.map_offset[0]
-        touch_on_image_y = touch.pos[1] - image_widget.y - screen.map_offset[1]
-        
-        pixel_x = touch_on_image_x / screen.map_scale
-        pixel_y = (screen.texture_size[1] * screen.map_scale - touch_on_image_y) / screen.map_scale
-        
-        map_x = (pixel_x * resolution) + origin_x
-        map_y = (pixel_y * resolution) + origin_y
-        
-        screen.selected_goal_coords = (map_x, map_y)
-        
-        screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
+        self.listener = tf.TransformListener()
+        rate = rospy.Rate(10.0)  # 10 Hz
 
-    def confirm_navigation_goal(self):
-        screen = self.root.get_screen('navigation')
-        if screen.selected_goal_coords:
-            map_x, map_y = screen.selected_goal_coords
+        while not self._stop_event.is_set():
+            self._run_event.wait()  # Tunggu di sini sampai diaktifkan
             
-            goal_msg_yaml = f"""header:
-  stamp: now
-  frame_id: "map"
-pose:
-  position:
-    x: {map_x}
-    y: {map_y}
-    z: 0.0
-  orientation:
-    x: 0.0
-    y: 0.0
-    z: 0.0
-    w: 1.0"""
+            if self._stop_event.is_set():
+                break
 
-            command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
             try:
-                subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                (trans, rot) = self.listener.lookupTransform('/map', '/base_link', rospy.Time(0))
+                _, _, yaw = euler_from_quaternion(rot)
+                self.robot_pose = {'x': trans[0], 'y': trans[1], 'yaw': yaw}
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                self.robot_pose = None
+                continue
+            finally:
+                rate.sleep()
+
+    def start_listening(self):
+        self._run_event.set()
+
+    def stop_listening(self):
+        self._run_event.clear()
+        self.robot_pose = None
+
+    def stop_thread(self):
+        self._stop_event.set()
+        self._run_event.set()
+
+    def get_pose(self):
+        return self.robot_pose
+
+class RosManager:
+    def __init__(self, status_callback):
+        self.roscore_process = None
+        self.controller_process = None
+        self.mapping_process = None
+        self.navigation_process = None
+        self.is_controller_running = False
+        self.is_mapping_running = False
+        self.is_navigation_running = False
+        self.status_callback = status_callback
+        self.rospack = rospkg.RosPack()
+        self.current_map_name = None
+        self.map_metadata = None
+        self.pose_listener = None
+        
+        self.start_roscore_if_needed()
+        self._init_ros_node()
+        print("INFO: RosManager siap.")
+
+    def start_roscore_if_needed(self):
+        try:
+            subprocess.check_output(["pidof", "roscore"])
+        except subprocess.CalledProcessError:
+            print("INFO: roscore belum berjalan, memulai di latar belakang...")
+            try:
+                self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                time.sleep(4)
             except Exception as e:
-                print(f"ERROR: Gagal mengirim perintah goal: {e}")
+                print(f"FATAL: Gagal memulai roscore: {e}")
 
-            screen.ids.navigate_button.disabled = True
-            screen.ids.navigation_status_label.text = "Status: Goal terkirim. Klik titik lain untuk goal baru."
-            
-    # --- Sisa fungsi tidak perlu diubah ---
-    def go_to_controller_mode(self):
-        status = self.manager.start_controller()
-        self.update_status_label('controller', 'controller_status_label', status)
-        self.root.current = 'controller'
+    def _init_ros_node(self):
+        if not rospy: return
+        try:
+            rospy.init_node('kivy_ros_manager', anonymous=True, disable_signals=True)
+            self.pose_listener = RosPoseListener()
+            self.pose_listener.start()
+            print("INFO: Node ROS 'kivy_ros_manager' berhasil diinisialisasi.")
+        except Exception as e:
+            print(f"FATAL: Gagal menginisialisasi node ROS: {e}")
+            self.pose_listener = None
 
-    def exit_controller_mode(self):
-        self.manager.stop_controller()
-        self.root.current = 'main_menu'
-
-    def go_to_mapping_mode(self, map_name):
-        if not map_name.strip():
-            self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
-            return
-        status = self.manager.start_mapping(map_name)
-        self.root.current = 'mapping'
-        Clock.schedule_once(lambda dt: self.update_mapping_labels(status, map_name), 0.1)
-
-    def update_mapping_labels(self, status, map_name):
-        screen = self.root.get_screen('mapping')
-        if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
-        if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
-
-    def exit_mapping_mode(self):
-        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
-        Clock.schedule_once(self._finish_exit_mapping, 1)
-
-    def _finish_exit_mapping(self, dt):
-        self.manager.stop_mapping()
-        self.root.current = 'main_menu'
-
-    def start_navigation_with_map(self, map_name, *args):
-        self.manager.start_navigation(map_name)
-        self.root.current = 'navigation'
-
-    def exit_navigation_mode(self):
-        self.manager.stop_navigation()
-        self.root.current = 'main_menu'
-
-    def on_stop(self):
-        self.manager.shutdown()
-
-    @mainthread
-    def update_status_label(self, screen_name, label_id, new_text):
-        if self.root:
+    def _stop_process_group(self, process, name):
+        if process and process.poll() is None:
             try:
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                process.wait(timeout=5)
+            except (ProcessLookupError, subprocess.TimeoutExpired, OSError):
+                pass
+        return None
+    
+    def _send_stop_command(self):
+        cancel_command = 'rostopic pub -1 /move_base/cancel actionlib_msgs/GoalID -- {}'
+        try:
+            subprocess.run(cancel_command, shell=True, check=True, timeout=2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+        except Exception:
+            pass
+
+        stop_command = 'rostopic pub /cmd_vel geometry_msgs/Twist "linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}" -r 20'
+        publisher_process = None
+        try:
+            publisher_process = subprocess.Popen(stop_command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+        finally:
+            if publisher_process:
+                try:
+                    os.killpg(os.getpgid(publisher_process.pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
+    def start_navigation(self, map_name):
+        if not self.is_navigation_running:
+            try:
+                self.current_map_name = map_name
+                pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+                map_file_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
+                command = f"roslaunch autonomus_mobile_robot gui_navigation.launch map_file:={map_file_path}"
+                self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
+                self.is_navigation_running = True
+                self.start_controller()
+                
+                if self.pose_listener:
+                    time.sleep(5)
+                    self.pose_listener.start_listening()
+
+                print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
+                return f"Navigasi dengan peta\\n'{map_name}' AKTIF"
+            except Exception as e:
+                print(f"FATAL: Gagal menjalankan navigasi: {e}")
+                return f"GAGAL memulai navigasi!\\nError: {e}"
+        return "Status: Navigasi Sudah Aktif"
+        
+    def stop_navigation(self):
+        if self.is_navigation_running:
+            if self.pose_listener:
+                self.pose_listener.stop_listening()
+            self._send_stop_command()
+            self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
+            self.is_navigation_running = False
+            self.stop_controller()
+            self.current_map_name = None
+            self.map_metadata = None
+        return "Status: DIMATIKAN"
+
+    def shutdown(self):
+        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
+        if self.pose_listener:
+            self.pose_listener.stop_thread()
+            self.pose_listener.join()
+        self._send_stop_command()
+        self.stop_mapping()
+        self.stop_navigation()
+        self.stop_controller() 
+        if self.roscore_process:
+            self._stop_process_group(self.roscore_process, "roscore")
+    
+    def get_robot_pose(self):
+        if self.pose_listener:
+            return self.pose_listener.get_pose()
+        return None
+
+    def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
+        # Fungsi ini sekarang digantikan oleh logika baru di gui.py
+        # tapi tetap dipertahankan untuk referensi
+        pass
+
+    # --- Sisa fungsi tidak perlu diubah ---
+    def start_controller(self):
+        if not self.is_controller_running:
+            command = "roslaunch my_robot_pkg controller.launch"
+            self.controller_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.is_controller_running = True
+            return "Status: AKTIF"
+        return "Status: Sudah Aktif"
+
+    def stop_controller(self):
+        if self.is_controller_running:
+            self._send_stop_command()
+            self.controller_process = self._stop_process_group(self.controller_process, "Controller")
+            self.is_controller_running = False
+        return "Status: DIMATIKAN"
+
+    def start_mapping(self, map_name):
+        if not self.is_mapping_running:
+            self.current_map_name = map_name
+            command = "roslaunch autonomus_mobile_robot mapping.launch"
+            try:
+                self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
+                self.is_mapping_running = True
+                print(f"INFO: Mode Mapping dimulai untuk peta '{self.current_map_name}'.")
+                self.start_controller()
+                return "Mode Pemetaan AKTIF.\\nSilakan gerakkan robot."
+            except Exception as e:
+                print(f"FATAL: Gagal menjalankan mapping: {e}"); return f"GAGAL memulai mapping!\\nError: {e}"
+        return "Status: Mapping Sudah Aktif"
+
+    def stop_mapping(self):
+        if self.is_mapping_running:
+            self._save_map_on_exit()
+            self._send_stop_command()
+            self.mapping_process = self._stop_process_group(self.mapping_process, "Mapping")
+            self.is_mapping_running = False
+            self.stop_controller()
+            self.current_map_name = None
+        return "Status: DIMATIKAN"
+
+    def _save_map_on_exit(self):
+        if not self.current_map_name: return
+        try:
+            pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+            map_save_path = os.path.join(pkg_path, 'maps', self.current_map_name)
+            command = f"rosrun map_server map_saver -f {map_save_path}"
+            subprocess.run(command, shell=True, check=True, timeout=15, capture_output=True, text=True)
+            print("INFO: Peta berhasil disimpan!")
+        except Exception as e:
+            print(f"ERROR: Gagal menyimpan peta saat keluar: {e}")
+
+    def get_available_maps(self):
+        try:
+            pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+            maps_dir = os.path.join(pkg_path, 'maps')
+            map_files = glob.glob(os.path.join(maps_dir, '*.yaml'))
+            map_names = [os.path.splitext(os.path.basename(f))[0] for f in map_files]
+            return map_names
+        except Exception as e:
+            print(f"ERROR: Gagal mencari peta: {e}")
+            return []
+
+    def get_map_image_path(self, map_name):
+        try:
+            pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+            map_image_path = os.path.join(pkg_path, 'maps', f"{map_name}.pgm")
+            if os.path.exists(map_image_path):
+                return map_image_path
+        except Exception as e:
+            print(f"ERROR: Tidak dapat menemukan file gambar untuk peta '{map_name}': {e}")
+        return None
+
+    def load_map_metadata(self, map_name):
+        try:
+            pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+            map_yaml_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
+            with open(map_yaml_path, 'r') as f:
+                self.map_metadata = yaml.safe_load(f)
+        except Exception as e:
+            print(f"ERROR: Gagal memuat metadata peta '{map_name}': {e}")
+            self.map_metadata = None
