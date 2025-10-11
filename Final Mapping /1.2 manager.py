@@ -52,18 +52,33 @@ class RosManager:
         return None
 
     # ==================================================================
-    # ==================== FUNGSI BARU DITAMBAHKAN =====================
+    # ==================== FUNGSI INI DIPERBARUI =======================
     # ==================================================================
     def _send_stop_command(self):
-        """Mengirim perintah berhenti (kecepatan nol) ke topik /cmd_vel."""
-        print("INFO: Mengirim perintah berhenti darurat ke robot...")
-        command = 'rostopic pub -1 /cmd_vel geometry_msgs/Twist "linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}"'
+        """
+        Mengirim aliran perintah berhenti ke /cmd_vel selama 0.5 detik
+        untuk memastikan semua gerakan berhenti.
+        """
+        print("INFO: Membanjiri /cmd_vel dengan perintah berhenti...")
+        # Perintah ini akan mem-publish ke /cmd_vel dengan rate 20 Hz
+        stop_command = 'rostopic pub /cmd_vel geometry_msgs/Twist "linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}" -r 20'
+        
+        publisher_process = None
         try:
-            # Jalankan perintah ini untuk memastikan robot berhenti
-            subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(0.2) # Beri sedikit waktu agar perintah terkirim
+            # Jalankan publisher di latar belakang
+            publisher_process = subprocess.Popen(stop_command, shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Biarkan ia berjalan selama 0.5 detik untuk membanjiri topik
+            time.sleep(0.5)
         except Exception as e:
-            print(f"ERROR: Gagal mengirim perintah berhenti: {e}")
+            print(f"ERROR: Gagal memulai publisher perintah berhenti: {e}")
+        finally:
+            # Hentikan publisher setelah selesai
+            if publisher_process:
+                try:
+                    os.killpg(os.getpgid(publisher_process.pid), signal.SIGTERM)
+                    print("INFO: Publisher perintah berhenti telah dihentikan.")
+                except ProcessLookupError:
+                    pass # Proses mungkin sudah selesai dengan sendirinya
     # ==================================================================
 
     def start_controller(self):
@@ -77,7 +92,7 @@ class RosManager:
 
     def stop_controller(self):
         if self.is_controller_running:
-            self._send_stop_command() # Pastikan robot berhenti juga saat controller dimatikan
+            self._send_stop_command()
             self.controller_process = self._stop_process_group(self.controller_process, "Controller")
             self.is_controller_running = False
             print("INFO: Mode Controller dihentikan.")
@@ -100,7 +115,6 @@ class RosManager:
     def stop_mapping(self):
         if self.is_mapping_running:
             self._save_map_on_exit()
-            # Panggil perintah stop SEBELUM mematikan proses lain
             self._send_stop_command()
             self.mapping_process = self._stop_process_group(self.mapping_process, "Mapping")
             self.is_mapping_running = False
@@ -153,12 +167,7 @@ class RosManager:
         
     def stop_navigation(self):
         if self.is_navigation_running:
-            # ==================================================================
-            # ==================== PERBAIKAN UTAMA ADA DI SINI =================
-            # ==================================================================
-            # Panggil perintah stop SEBELUM mematikan proses navigasi
             self._send_stop_command()
-            # ==================================================================
             
             self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
             self.is_navigation_running = False
@@ -189,6 +198,7 @@ class RosManager:
             self.map_metadata = None
 
     def send_goal_from_pixel(self, touch_x, touch_y, image_width, image_height):
+        """Versi ini diubah untuk menerima piksel dari kiri-bawah (Kivy)"""
         if not self.map_metadata:
             print("ERROR: Metadata peta belum dimuat. Tidak bisa mengirim goal.")
             return
@@ -197,9 +207,8 @@ class RosManager:
         origin_x = self.map_metadata['origin'][0]
         origin_y = self.map_metadata['origin'][1]
         
-        pixel_y_from_bottom = touch_y
         map_x = (touch_x * resolution) + origin_x
-        map_y = (pixel_y_from_bottom * resolution) + origin_y
+        map_y = (touch_y * resolution) + origin_y
         
         print(f"INFO: Sentuhan di piksel ({touch_x:.2f}, {touch_y:.2f}) -> Dikonversi ke Goal ROS ({map_x:.2f}, {map_y:.2f})")
 
@@ -227,7 +236,7 @@ pose:
 
     def shutdown(self):
         print("INFO: Shutdown dipanggil, menghentikan semua proses...")
-        self._send_stop_command() # Tambahkan juga di sini untuk keamanan
+        self._send_stop_command()
         self.stop_mapping()
         self.stop_navigation()
         self.stop_controller() 
