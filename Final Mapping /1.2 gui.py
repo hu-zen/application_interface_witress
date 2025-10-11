@@ -12,6 +12,7 @@ from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior
 from kivy.properties import ObjectProperty
 import yaml
+import subprocess # Ditambahkan untuk mengirim perintah navigasi
 
 from manager import RosManager
 
@@ -37,10 +38,11 @@ class MapImage(TouchRippleBehavior, Image):
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
+            # Hapus marker lama sebelum membuat yang baru
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Logika visual untuk 'X' sudah benar, tidak perlu diubah.
+            # Bagian visual ini sudah benar, posisi X akan selalu pas
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -53,19 +55,21 @@ class MapImage(TouchRippleBehavior, Image):
         return False
 
 class NavigationScreen(Screen):
-    selected_pixel_coords = None
+    # Properti ini sekarang akan menyimpan koordinat dunia (meter), bukan piksel
+    selected_goal_coords = None
 
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         
+        # Hapus marker HANYA jika masuk ke layar baru
         map_viewer = self.ids.map_viewer
         if map_viewer.marker and map_viewer.marker.parent:
             map_viewer.remove_widget(map_viewer.marker)
             map_viewer.marker = None
 
-        self.selected_pixel_coords = None
+        self.selected_goal_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
 
     def load_map_image(self, map_name):
@@ -138,6 +142,7 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
+    # ... (Sisa dari ScreenManager tetap sama)
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -161,7 +166,6 @@ ScreenManager:
                 on_press: sm.current = 'nav_selection'
     Screen:
         name: 'pre_mapping'
-        # ... (sisa KV design tidak berubah)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -228,67 +232,85 @@ ScreenManager:
     # ==================== LOGIKA KALKULASI BARU =======================
     # ==================================================================
     def calculate_ros_goal(self, touch, image_widget):
-        """Menghitung ulang koordinat piksel untuk dikirim ke manager."""
+        """Menghitung koordinat dunia (meter) secara langsung dari klik Kivy."""
         screen = self.root.get_screen('navigation')
         
-        # 1. Periksa apakah semua data yang dibutuhkan sudah siap
-        if not image_widget.texture:
+        if not image_widget.texture or not self.manager.map_metadata:
             return
 
-        # 2. Dapatkan ukuran asli gambar (tekstur) dan ukuran widget di layar
+        meta = self.manager.map_metadata
+        resolution = meta['resolution']
+        origin_x = meta['origin'][0]
+        origin_y = meta['origin'][1]
+
         norm_w, norm_h = image_widget.texture.size
-        widget_w, widget_h = image_widget.size
         if norm_w == 0 or norm_h == 0: return
 
-        # 3. Hitung skala dan offset (garis hitam) gambar di dalam widget Kivy
+        widget_w, widget_h = image_widget.size
         img_ratio = norm_w / norm_h
         widget_ratio = widget_w / widget_h
 
-        if widget_ratio > img_ratio: # Garis hitam di kanan-kiri
+        if widget_ratio > img_ratio:
             scale = widget_h / norm_h
             offset_x = (widget_w - norm_w * scale) / 2.0
             offset_y = 0.0
-        else: # Garis hitam di atas-bawah
+        else:
             scale = widget_w / norm_w
             offset_x = 0.0
             offset_y = (widget_h - norm_h * scale) / 2.0
         
         if scale == 0: return
 
-        # 4. Konversi koordinat sentuhan Kivy ke koordinat piksel pada gambar asli
-        #    `touch.pos` adalah posisi klik dari pojok kiri-bawah widget
-        touch_local_x, touch_local_y = touch.pos
+        touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
+        touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
-        #    Kurangi offset dan bagi dengan skala untuk mendapatkan piksel asli
-        pixel_x = (touch_local_x - offset_x) / scale
-        pixel_y = (touch_local_y - offset_y) / scale
+        pixel_x = touch_on_image_x / scale
+        pixel_y = touch_on_image_y / scale
 
-        # 5. Simpan koordinat piksel ini untuk dikirim ke manager
-        #    Manager akan melakukan konversi akhir ke koordinat dunia ROS
-        screen.selected_pixel_coords = (pixel_x, pixel_y, norm_w, norm_h)
+        # Konversi piksel ke koordinat dunia ROS (meter)
+        map_x = (pixel_x * resolution) + origin_x
+        map_y = (pixel_y * resolution) + origin_y
         
-        # 6. Aktifkan UI
+        # Simpan hasil akhir (koordinat dunia)
+        screen.selected_goal_coords = (map_x, map_y)
+        
         screen.ids.navigate_button.disabled = False
-        screen.ids.navigation_status_label.text = "Status: Titik dipilih. Siap navigasi."
-
+        screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
 
     def confirm_navigation_goal(self):
         screen = self.root.get_screen('navigation')
-        if screen.selected_pixel_coords:
-            # Ambil data piksel yang sudah dihitung dengan benar
-            px, py, w, h = screen.selected_pixel_coords
+        if screen.selected_goal_coords:
+            map_x, map_y = screen.selected_goal_coords
             
-            # Panggil fungsi di manager untuk mengirim goal
-            # Manager akan menangani konversi akhir menggunakan origin dan resolution
-            self.manager.send_goal_from_pixel(px, py, w, h)
+            goal_msg_yaml = f"""header:
+  stamp: now
+  frame_id: "map"
+pose:
+  position:
+    x: {map_x}
+    y: {map_y}
+    z: 0.0
+  orientation:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    w: 1.0"""
 
-            # Bersihkan UI setelah mengirim
+            command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
+            try:
+                subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim ke /move_base_simple/goal")
+            except Exception as e:
+                print(f"ERROR: Gagal mengirim perintah goal: {e}")
+
+            # ==================================================================
+            # ==================== PERMINTAAN TAMBAHAN ANDA ====================
+            # ==================================================================
+            # Baris kode untuk menghapus marker 'X' telah dihapus dari sini.
+            # Tanda 'X' akan tetap ada sampai Anda mengklik titik baru.
+            # ==================================================================
+            
             screen.ids.navigate_button.disabled = True
-            map_viewer = screen.ids.map_viewer
-            if map_viewer.marker and map_viewer.marker.parent:
-                map_viewer.remove_widget(map_viewer.marker)
-                map_viewer.marker = None
-            screen.selected_pixel_coords = None
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
     # --- Sisa fungsi tidak perlu diubah ---
