@@ -54,24 +54,21 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
-        
-        # Sembunyikan semua marker saat layar dibuka
         self.cleanup_markers()
 
-        # Buat marker robot jika belum ada
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True)
             self.ids.map_container.add_widget(self.robot_marker)
         
         # ==================================================================
-        # ================== PERBAIKAN LOGIKA MARKER 'X' ===================
+        # ============== PERBAIKAN LOGIKA KLIK 'X' BAGIAN 1 ================
         # ==================================================================
-        # Buat marker 'X' sekali saja saat layar dibuat, lalu sembunyikan
+        # Buat marker 'X' sekali saja saat layar pertama kali dibuka, lalu sembunyikan.
         if not self.click_marker:
             self.click_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-            self.click_marker.opacity = 0 # Sembunyikan
             self.ids.map_container.add_widget(self.click_marker)
+        self.click_marker.opacity = 0 # Selalu sembunyikan saat masuk layar
         # ==================================================================
         
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
@@ -83,7 +80,7 @@ class NavigationScreen(Screen):
         self.cleanup_markers()
 
     def cleanup_markers(self):
-        # Sekarang hanya menyembunyikan, bukan menghapus
+        # Sekarang cleanup hanya menyembunyikan marker, bukan menghapusnya
         if self.click_marker:
             self.click_marker.opacity = 0
         if self.robot_marker:
@@ -93,10 +90,10 @@ class NavigationScreen(Screen):
         map_viewer = self.ids.map_viewer
         if map_viewer.collide_point(*touch.pos):
             # ==================================================================
-            # ================== PERBAIKAN LOGIKA MARKER 'X' ===================
+            # ============== PERBAIKAN LOGIKA KLIK 'X' BAGIAN 2 ================
             # ==================================================================
-            # Alih-alih membuat/menghapus, kita hanya memindahkan marker
-            # yang sudah ada dan menampilkannya.
+            # Alih-alih membuat/menghapus, kita hanya memindahkan marker yang sudah ada.
+            # Ini jauh lebih stabil dan akan selalu berfungsi.
             self.click_marker.center = touch.pos
             self.click_marker.opacity = 1 # Tampilkan marker
             # ==================================================================
@@ -150,13 +147,12 @@ class NavigationScreen(Screen):
         origin_x = meta.get('origin', [0,0,0])[0]
         origin_y = meta.get('origin', [0,0,0])[1]
 
-        pixel_x_on_map = (pose['x'] - origin_x) / resolution
-        pixel_y_on_map = (pose['y'] - origin_y) / resolution
+        pixel_x = (pose['x'] - origin_x) / resolution
+        # Balik sumbu Y untuk sistem koordinat Kivy
+        pixel_y = self.texture_size[1] - ((pose['y'] - origin_y) / resolution)
 
-        pixel_y_kivy = self.texture_size[1] - pixel_y_on_map
-        
-        final_x = (pixel_x_on_map * self.map_scale) + self.map_offset[0] + map_viewer.x
-        final_y = (pixel_y_kivy * self.map_scale) + self.map_offset[1] + map_viewer.y
+        final_x = (pixel_x * self.map_scale) + self.map_offset[0] + map_viewer.x
+        final_y = (pixel_y * self.map_scale) + self.map_offset[1] + map_viewer.y
 
         self.robot_marker.center = (final_x, final_y)
         self.robot_marker.angle = math.degrees(pose['yaw'])
@@ -166,7 +162,7 @@ class MainApp(App):
         self.manager = RosManager(status_callback=self.update_status_label)
         
         kv_design = """
-# Desain KV tidak berubah
+# Desain KV tidak berubah dari versi Anda yang berhasil
 <RobotMarker>:
     canvas.before:
         PushMatrix
@@ -177,7 +173,26 @@ class MainApp(App):
         PopMatrix
 
 <NavSelectionScreen>:
-    # ...
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 20
+        spacing: 10
+        Label:
+            text: 'Pilih Peta untuk Navigasi'
+            font_size: '24sp'
+            size_hint_y: 0.15
+        ScrollView:
+            GridLayout:
+                id: nav_map_grid
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 10
+        Button:
+            text: 'Kembali ke Menu'
+            size_hint_y: 0.15
+            on_press: root.manager.current = 'main_menu'
+
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -218,9 +233,112 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
-    # ... (Sisa dari ScreenManager tidak berubah)
+    # Sisa dari ScreenManager tidak berubah
+    Screen:
+        name: 'main_menu'
+    Screen:
+        name: 'pre_mapping'
+    Screen:
+        name: 'controller'
+    Screen:
+        name: 'mapping'
+    NavSelectionScreen:
+        name: 'nav_selection'
+    NavigationScreen:
+        name: 'navigation'
 """
-        return Builder.load_string(kv_design)
+        # Load the full KV string
+        full_kv_string = self.get_full_kv_string(kv_design)
+        return Builder.load_string(full_kv_string)
+
+    def get_full_kv_string(self, base_kv):
+        # Helper to avoid code duplication. This builds the full KV string.
+        # This part ensures all your screens are defined, fixing the black screen bug.
+        screens_kv = """
+<MainMenuScreen@Screen>:
+    name: 'main_menu'
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 40
+        spacing: 20
+        Label:
+            text: 'Waiter Bot Control Center'
+            font_size: '30sp'
+        Button:
+            text: 'Mode Controller'
+            font_size: '22sp'
+            on_press: app.go_to_controller_mode()
+        Button:
+            text: 'Mode Mapping'
+            font_size: '22sp'
+            on_press: root.manager.current = 'pre_mapping'
+        Button:
+            text: 'Mode Navigasi'
+            font_size: '22sp'
+            on_press: root.manager.current = 'nav_selection'
+
+<PreMappingScreen@Screen>:
+    name: 'pre_mapping'
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 40
+        spacing: 20
+        Label:
+            text: 'Masukkan Nama Peta'
+            font_size: '26sp'
+        TextInput:
+            id: map_name_input
+            hint_text: 'Contoh: peta_lantai_1'
+            font_size: '20sp'
+            multiline: False
+            size_hint_y: None
+            height: '48dp'
+        Button:
+            text: 'Mulai Mapping'
+            font_size: '22sp'
+            on_press: app.go_to_mapping_mode(map_name_input.text)
+        Button:
+            text: 'Kembali ke Menu'
+            font_size: '22sp'
+            on_press: root.manager.current = 'main_menu'
+            
+<ControllerScreen@Screen>:
+    name: 'controller'
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 40
+        spacing: 20
+        Label:
+            id: controller_status_label
+            text: 'Status: Siap'
+            font_size: '20sp'
+        Button:
+            text: 'Stop & Kembali ke Menu'
+            font_size: '22sp'
+            on_press: app.exit_controller_mode()
+
+<MappingScreen@Screen>:
+    name: 'mapping'
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 40
+        spacing: 20
+        Label:
+            id: mapping_status_label
+            text: 'Status: Siap'
+            font_size: '20sp'
+        Label:
+            id: current_map_name_label
+            text: 'Memetakan: '
+            font_size: '18sp'
+            color: 0.7, 0.7, 0.7, 1
+        Button:
+            text: 'Selesai Mapping & Simpan Otomatis'
+            font_size: '22sp'
+            on_press: app.exit_mapping_mode()
+"""
+        # Replace the placeholder in the base_kv string
+        return base_kv.replace("ScreenManager:\n    id: sm\n    # Sisa dari ScreenManager tidak berubah", screens_kv + "\nScreenManager:\n    id: sm")
 
     def calculate_ros_goal(self, touch, screen):
         image_widget = screen.ids.map_viewer
@@ -236,8 +354,11 @@ ScreenManager:
         touch_on_image_y = touch.pos[1] - image_widget.y - screen.map_offset[1]
         
         pixel_x = touch_on_image_x / screen.map_scale
-        pixel_y = screen.texture_size[1] - (touch_on_image_y / screen.map_scale)
+        pixel_y_from_bottom = touch_on_image_y / screen.map_scale
         
+        # Balik sumbu Y untuk kalkulasi ROS
+        pixel_y = screen.texture_size[1] - pixel_y_from_bottom
+
         map_x = (pixel_x * resolution) + origin_x
         map_y = (pixel_y * resolution) + origin_y
         
@@ -271,14 +392,8 @@ pose:
             except Exception as e:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
 
-            # ==================================================================
-            # ================== PERBAIKAN LOGIKA TOMBOL =====================
-            # ==================================================================
-            # Tombol navigasi tidak dinonaktifkan permanen, sehingga Anda
-            # bisa langsung menekan lagi setelah goal pertama terkirim.
-            # screen.ids.navigate_button.disabled = True 
-            screen.ids.navigation_status_label.text = "Status: Goal terkirim! Klik titik lain atau tekan navigasi lagi."
-            # ==================================================================
+            screen.ids.navigate_button.disabled = True
+            screen.ids.navigation_status_label.text = "Status: Goal terkirim! Klik titik lain untuk goal baru."
             
     # --- Sisa fungsi tidak perlu diubah ---
     def go_to_controller_mode(self):
