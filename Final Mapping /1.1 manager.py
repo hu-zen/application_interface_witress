@@ -16,7 +16,7 @@ try:
     import tf
     from tf.transformations import euler_from_quaternion
 except ImportError:
-    print("WARN: Pustaka 'rospy' atau 'tf' tidak ditemukan. Fungsionalitas posisi real-time tidak akan bekerja.")
+    print("FATAL: Pustaka 'rospy' atau 'tf' tidak ditemukan. Fungsionalitas posisi real-time tidak akan bekerja.")
     rospy = None
     tf = None
 # -----------------------------------------
@@ -25,47 +25,50 @@ except ImportError:
 class RosPoseListener(threading.Thread):
     def __init__(self):
         super(RosPoseListener, self).__init__()
-        self.daemon = True  # Thread akan mati saat program utama selesai
+        self.daemon = True
         self.listener = None
         self.robot_pose = None
         self._stop_event = threading.Event()
+        self._run_event = threading.Event() # Event untuk mengontrol loop utama
 
     def run(self):
         if not rospy or not tf:
             return
 
-        # Inisialisasi node di dalam thread
-        # check_ros_master_active()  # Pastikan roscore berjalan
-        try:
-            rospy.init_node('kivy_tf_listener', anonymous=True, disable_signals=True)
-            self.listener = tf.TransformListener()
-            rate = rospy.Rate(10.0) # 10 Hz
+        print("INFO: Thread listener posisi robot dimulai.")
+        self.listener = tf.TransformListener()
+        rate = rospy.Rate(10.0) # 10 Hz
+
+        while not self._stop_event.is_set():
+            # Tunggu sampai event `run` diaktifkan
+            self._run_event.wait() 
             
-            print("INFO: Thread listener posisi robot dimulai.")
+            # Jika event stop juga aktif, keluar dari loop
+            if self._stop_event.is_set():
+                break
 
-            while not self._stop_event.is_set():
-                try:
-                    # Dapatkan transformasi antara frame peta dan frame dasar robot
-                    (trans, rot) = self.listener.lookupTransform('/map', '/base_link', rospy.Time(0))
-                    
-                    # Konversi quaternion ke euler untuk mendapatkan orientasi (yaw)
-                    _, _, yaw = euler_from_quaternion(rot)
-                    
-                    # Simpan posisi dan orientasi
-                    self.robot_pose = {'x': trans[0], 'y': trans[1], 'yaw': yaw}
-
-                except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-                    # Jika transformasi tidak tersedia, jangan lakukan apa-apa
-                    # Ini normal terjadi saat sistem baru dimulai
-                    continue
+            try:
+                (trans, rot) = self.listener.lookupTransform('/map', '/base_link', rospy.Time(0))
+                _, _, yaw = euler_from_quaternion(rot)
+                self.robot_pose = {'x': trans[0], 'y': trans[1], 'yaw': yaw}
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                self.robot_pose = None # Hapus pose jika tidak ditemukan
+                continue
+            finally:
                 rate.sleep()
-        except rospy.ROSInterruptException:
-            pass
-        finally:
-            print("INFO: Thread listener posisi robot dihentikan.")
 
-    def stop(self):
+        print("INFO: Thread listener posisi robot dihentikan.")
+
+    def start_listening(self):
+        self._run_event.set() # Aktifkan loop
+
+    def stop_listening(self):
+        self._run_event.clear() # Jeda loop
+        self.robot_pose = None
+
+    def stop_thread(self):
         self._stop_event.set()
+        self._run_event.set() # Pastikan thread tidak terjebak di `wait()`
 
     def get_pose(self):
         return self.robot_pose
@@ -88,25 +91,29 @@ class RosManager:
         self.current_map_name = None
         self.map_metadata = None
 
-        # --- Tambahan untuk Listener Posisi Robot ---
         self.pose_listener = None
-        # -----------------------------------------
         
         self.start_roscore()
+        self._init_ros_node() # Inisialisasi node ROS sekali di awal
         print("INFO: RosManager siap.")
 
-    def start_roscore(self):
+    def _init_ros_node(self):
+        """Menginisialisasi node rospy hanya sekali."""
+        if not rospy: return
         try:
+            # Periksa apakah roscore berjalan sebelum init_node
             subprocess.check_output(["pidof", "roscore"])
-            print("INFO: roscore sudah berjalan.")
-        except subprocess.CalledProcessError:
-            print("INFO: Memulai roscore di latar belakang...")
-            try:
-                self.roscore_process = subprocess.Popen("roscore", preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                time.sleep(4)
-                print("INFO: roscore seharusnya sudah aktif.")
-            except Exception as e:
-                print(f"FATAL: Gagal memulai roscore: {e}")
+            rospy.init_node('kivy_tf_listener', anonymous=True, disable_signals=True)
+            print("INFO: Node ROS 'kivy_tf_listener' berhasil diinisialisasi.")
+            # Buat thread listener sekarang, tapi jangan mulai loop-nya
+            self.pose_listener = RosPoseListener()
+            self.pose_listener.start()
+        except (rospy.ROSInitException, subprocess.CalledProcessError) as e:
+            print(f"WARN: Gagal menginisialisasi node ROS. Mungkin roscore belum siap. {e}")
+            self.pose_listener = None
+        except Exception as e:
+            print(f"FATAL: Terjadi error tak terduga saat inisialisasi node ROS: {e}")
+            self.pose_listener = None
 
     def _stop_process_group(self, process, name):
         if process and process.poll() is None:
@@ -118,6 +125,59 @@ class RosManager:
                 print(f"WARN: Gagal menghentikan '{name}' dengan normal.")
         return None
 
+    def start_navigation(self, map_name):
+        if not self.is_navigation_running:
+            try:
+                self.current_map_name = map_name
+                pkg_path = self.rospack.get_path('autonomus_mobile_robot')
+                map_file_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
+                
+                command = f"roslaunch autonomus_mobile_robot gui_navigation.launch map_file:={map_file_path}"
+                
+                self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
+                self.is_navigation_running = True
+                self.start_controller()
+
+                # "Bangunkan" thread listener
+                if self.pose_listener:
+                    print("INFO: Mengaktifkan listener posisi robot.")
+                    time.sleep(5)  # Beri waktu agar node ROS lain (seperti AMCL) siap
+                    self.pose_listener.start_listening()
+                
+                print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
+                return f"Navigasi dengan peta\\n'{map_name}' AKTIF"
+            except Exception as e:
+                print(f"FATAL: Gagal menjalankan navigasi: {e}")
+                return f"GAGAL memulai navigasi!\\nError: {e}"
+        return "Status: Navigasi Sudah Aktif"
+        
+    def stop_navigation(self):
+        if self.is_navigation_running:
+            # "Tidurkan" thread listener
+            if self.pose_listener:
+                print("INFO: Menjeda listener posisi robot.")
+                self.pose_listener.stop_listening()
+
+            self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
+            self.is_navigation_running = False
+            self.stop_controller()
+            self.current_map_name = None
+            self.map_metadata = None
+        return "Status: DIMATIKAN"
+    
+    def shutdown(self):
+        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
+        self.stop_mapping()
+        self.stop_navigation()
+        self.stop_controller() 
+        if self.roscore_process:
+            self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
+        # Hentikan thread listener secara permanen
+        if self.pose_listener:
+            self.pose_listener.stop_thread()
+            self.pose_listener.join()
+    
+    # --- Sisa fungsi lainnya tidak berubah ---
     def start_controller(self):
         if not self.is_controller_running:
             command = "roslaunch my_robot_pkg controller.launch"
@@ -180,49 +240,6 @@ class RosManager:
             print(f"ERROR: Gagal mencari peta: {e}")
             return []
 
-    def start_navigation(self, map_name):
-        if not self.is_navigation_running:
-            try:
-                self.current_map_name = map_name
-                pkg_path = self.rospack.get_path('autonomus_mobile_robot')
-                map_file_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
-                
-                command = f"roslaunch autonomus_mobile_robot gui_navigation.launch map_file:={map_file_path}"
-                
-                self.navigation_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
-                self.is_navigation_running = True
-                self.start_controller()
-
-                # --- Mulai listener posisi ---
-                if rospy and tf:
-                    time.sleep(5)  # Beri waktu agar node ROS lain (seperti AMCL) siap
-                    self.pose_listener = RosPoseListener()
-                    self.pose_listener.start()
-                # ---------------------------
-                
-                print(f"INFO: Mode Navigasi dimulai dengan peta '{map_name}'.")
-                return f"Navigasi dengan peta\\n'{map_name}' AKTIF"
-            except Exception as e:
-                print(f"FATAL: Gagal menjalankan navigasi: {e}")
-                return f"GAGAL memulai navigasi!\\nError: {e}"
-        return "Status: Navigasi Sudah Aktif"
-        
-    def stop_navigation(self):
-        if self.is_navigation_running:
-            # --- Hentikan listener posisi ---
-            if self.pose_listener:
-                self.pose_listener.stop()
-                self.pose_listener.join()
-                self.pose_listener = None
-            # ------------------------------
-
-            self.navigation_process = self._stop_process_group(self.navigation_process, "Navigation")
-            self.is_navigation_running = False
-            self.stop_controller()
-            self.current_map_name = None
-            self.map_metadata = None
-        return "Status: DIMATIKAN"
-    
     def get_robot_pose(self):
         if self.pose_listener:
             return self.pose_listener.get_pose()
@@ -285,11 +302,3 @@ pose:
             print("INFO: Perintah GOAL dikirim ke /move_base_simple/goal")
         except Exception as e:
             print(f"ERROR: Gagal mengirim perintah goal: {e}")
-
-    def shutdown(self):
-        print("INFO: Shutdown dipanggil, menghentikan semua proses...")
-        self.stop_mapping()
-        self.stop_navigation()
-        self.stop_controller() 
-        if self.roscore_process:
-            self.roscore_process = self._stop_process_group(self.roscore_process, "roscore")
