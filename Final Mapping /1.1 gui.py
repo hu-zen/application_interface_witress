@@ -33,23 +33,18 @@ class NavSelectionScreen(Screen):
             grid.add_widget(btn)
 
 class MapImage(TouchRippleBehavior, Image):
-    # Properti untuk menyimpan referensi ke penanda 'X'
     marker = ObjectProperty(None, allownone=True)
 
     def on_touch_down(self, touch):
-        # Memastikan klik berada di dalam area widget
         if self.collide_point(*touch.pos):
-            # Hapus penanda 'X' sebelumnya jika ada
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Logika visual ini sudah benar dan tidak perlu diubah
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
             self.marker = new_marker
 
-            # Panggil fungsi di App utama untuk menangani logika ROS
             App.get_running_app().calculate_ros_goal(touch, self)
 
             return super().on_touch_down(touch)
@@ -63,7 +58,6 @@ class NavigationScreen(Screen):
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
         
-        # Membersihkan penanda 'X' saat layar navigasi dibuka
         map_viewer = self.ids.map_viewer
         if map_viewer.marker and map_viewer.marker.parent:
             map_viewer.remove_widget(map_viewer.marker)
@@ -141,7 +135,6 @@ class MainApp(App):
 
 ScreenManager:
     id: sm
-    # ... (Sisa dari ScreenManager tetap sama)
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -261,10 +254,10 @@ ScreenManager:
         # ==================================================================
         # ==================== PERBAIKAN UTAMA ADA DI SINI =================
         # ==================================================================
-        # Konversi koordinat Y dari Kivy (bottom-left) ke sistem koordinat gambar (top-left)
-        # yang diharapkan oleh manager.py dan map_server.
+        # Konversi koordinat Y dari Kivy (origin di kiri-bawah) ke sistem koordinat
+        # gambar (origin di kiri-atas) yang diharapkan oleh manager.py.
         pixel_y_from_bottom = touch_on_image_y / scale
-        pixel_y_for_ros = norm_h - pixel_y_from_bottom
+        pixel_y_for_ros = norm_h - pixel_y_from_bottom # <--- INI PERUBAHANNYA
         # ==================================================================
         
         screen.selected_pixel_coords = (pixel_x_for_ros, pixel_y_for_ros, norm_w, norm_h)
@@ -276,7 +269,6 @@ ScreenManager:
         screen = self.root.get_screen('navigation')
         if screen.selected_pixel_coords:
             px, py, w, h = screen.selected_pixel_coords
-            # Kirim koordinat piksel yang sudah dikonversi dengan benar
             self.manager.send_goal_from_pixel(px, py, w, h)
             screen.ids.navigate_button.disabled = True
             
