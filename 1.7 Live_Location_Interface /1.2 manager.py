@@ -9,20 +9,17 @@ import glob
 import yaml
 import threading
 
-# Coba impor library ROS. Jika gagal, program tetap jalan tanpa fitur real-time.
+# Coba impor library ROS.
 try:
     import rospy
     import tf
     from tf.transformations import euler_from_quaternion
-    from kivy.clock import Clock
 except ImportError:
-    print("PERINGATAN: Pustaka ROS atau Kivy tidak ditemukan. Fungsionalitas penuh tidak akan bekerja.")
+    print("PERINGATAN: Pustaka 'rospy' atau 'tf' tidak ditemukan.")
     rospy = None
     tf = None
-    Clock = None
 
 class RosPoseListener(threading.Thread):
-    """Thread yang berjalan di latar belakang untuk mendengarkan posisi robot dari TF."""
     def __init__(self):
         super(RosPoseListener, self).__init__()
         self.daemon = True
@@ -79,27 +76,26 @@ class RosManager:
         print("INFO: RosManager siap.")
 
     # ==================================================================
-    # ==================== LOGIKA ASINKRON BARU ========================
+    # ==================== LOGIKA ASINKRON DIPERBAIKI ==================
     # ==================================================================
-
     def _threaded_start_task(self, task_function, on_finish_callback, *args):
-        """Helper untuk menjalankan fungsi di thread terpisah."""
         try:
             result_message = task_function(*args)
-            if Clock:
-                Clock.schedule_once(lambda dt: on_finish_callback(True, result_message))
+            # Langsung panggil callback dari thread ini.
+            # Pengaturan ke main thread akan diurus oleh decorator @mainthread di gui.py
+            on_finish_callback(True, result_message)
         except Exception as e:
             print(f"FATAL: Gagal menjalankan proses di thread: {e}")
-            if Clock:
-                Clock.schedule_once(lambda dt: on_finish_callback(False, str(e)))
+            on_finish_callback(False, str(e))
 
     def _execute_start_mapping(self, map_name):
-        """Logika inti untuk memulai mapping."""
         self.current_map_name = map_name
         command = "roslaunch autonomus_mobile_robot mapping.launch"
         self.mapping_process = subprocess.Popen(command, shell=True, preexec_fn=os.setsid)
         self.is_mapping_running = True
         self.start_controller()
+        # Beri sedikit waktu agar proses mulai
+        time.sleep(3)
         return f"Mode Pemetaan AKTIF untuk '{map_name}'."
 
     def start_mapping_async(self, map_name, on_finish_callback):
@@ -111,7 +107,6 @@ class RosManager:
             on_finish_callback(True, "Status: Mapping Sudah Aktif")
 
     def _execute_start_navigation(self, map_name):
-        """Logika inti untuk memulai navigasi."""
         self.current_map_name = map_name
         pkg_path = self.rospack.get_path('autonomus_mobile_robot')
         map_file_path = os.path.join(pkg_path, 'maps', f"{map_name}.yaml")
@@ -120,10 +115,8 @@ class RosManager:
         self.is_navigation_running = True
         self.start_controller()
         if self.pose_listener:
-            print("INFO: Menunggu AMCL aktif sebelum memulai listener posisi...")
-            time.sleep(5) # time.sleep() sekarang aman karena ada di thread lain
+            time.sleep(5)
             self.pose_listener.start_listening()
-            print("INFO: Listener posisi diaktifkan.")
         return f"Navigasi dengan peta '{map_name}' AKTIF"
 
     def start_navigation_async(self, map_name, on_finish_callback):
@@ -179,16 +172,13 @@ class RosManager:
     def shutdown(self):
         print("INFO: Shutdown dipanggil...")
         if self.pose_listener: self.pose_listener.stop_thread(); self.pose_listener.join()
-        self.stop_navigation()
-        self.stop_mapping()
-        self.stop_controller() 
+        self.stop_navigation(); self.stop_mapping(); self.stop_controller() 
         if self.roscore_process: self._stop_process_group(self.roscore_process, "roscore")
     def get_robot_pose(self): return self.pose_listener.get_pose() if self.pose_listener else None
     def start_controller(self):
         if not self.is_controller_running:
             self.controller_process = subprocess.Popen("roslaunch my_robot_pkg controller.launch", shell=True, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            self.is_controller_running = True
-            return "Status: AKTIF"
+            self.is_controller_running = True; return "Status: AKTIF"
         return "Status: Sudah Aktif"
     def stop_controller(self):
         if self.is_controller_running:
@@ -197,12 +187,9 @@ class RosManager:
         return "Status: DIMATIKAN"
     def stop_mapping(self):
         if self.is_mapping_running:
-            self._save_map_on_exit()
-            self._send_stop_command()
+            self._save_map_on_exit(); self._send_stop_command()
             self.mapping_process = self._stop_process_group(self.mapping_process, "Mapping")
-            self.is_mapping_running = False
-            self.stop_controller()
-            self.current_map_name = None
+            self.is_mapping_running = False; self.stop_controller(); self.current_map_name = None
         return "Status: DIMATIKAN"
     def _save_map_on_exit(self):
         if not self.current_map_name: return
