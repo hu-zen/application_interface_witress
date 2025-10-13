@@ -16,8 +16,10 @@ import math
 import os
 import subprocess
 
-# Gunakan manager.py yang sudah memiliki fitur real-time pose listener
 from manager import RosManager
+
+class LoadingScreen(Screen):
+    pass
 
 class NavSelectionScreen(Screen):
     def on_enter(self):
@@ -37,22 +39,15 @@ class NavSelectionScreen(Screen):
             grid.add_widget(btn)
 
 class MapImage(TouchRippleBehavior, Image):
-    """
-    Kelas ini menggunakan logika on_touch_down dari referensi Anda.
-    Tidak ada yang diubah sama sekali.
-    """
     marker = ObjectProperty(None, allownone=True)
-
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
-
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
             self.marker = new_marker
-
             App.get_running_app().calculate_ros_goal(touch, self)
             return super().on_touch_down(touch)
         return False
@@ -63,7 +58,6 @@ class RobotMarker(Image):
 class NavigationScreen(Screen):
     selected_goal_coords = None
     robot_marker = ObjectProperty(None, allownone=True)
-
     def on_enter(self):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
@@ -84,10 +78,8 @@ class NavigationScreen(Screen):
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
 
     def on_leave(self):
-        if hasattr(self, 'update_event'):
-            self.update_event.cancel()
-        if self.robot_marker:
-            self.robot_marker.opacity = 0
+        if hasattr(self, 'update_event'): self.update_event.cancel()
+        if self.robot_marker: self.robot_marker.opacity = 0
 
     def load_map_image(self, map_name):
         if map_name:
@@ -100,10 +92,6 @@ class NavigationScreen(Screen):
 
     @mainthread
     def update_robot_display(self, dt):
-        """
-        Fungsi ini sekarang 100% merupakan kebalikan matematis dari
-        fungsi calculate_ros_goal referensi Anda.
-        """
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
@@ -113,35 +101,24 @@ class NavigationScreen(Screen):
             return
             
         self.robot_marker.opacity = 1
-        
         meta = app.manager.map_metadata
-        resolution = meta.get('resolution', 0.05)
+        resolution = meta['resolution']
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
-
         norm_w, norm_h = map_viewer.texture.size
         if norm_w == 0 or norm_h == 0: return
-
         widget_w, widget_h = map_viewer.size
-        img_ratio = norm_w / norm_h
-        widget_ratio = widget_w / widget_h
-
+        img_ratio = norm_w / norm_h; widget_ratio = widget_w / widget_h
         if widget_ratio > img_ratio:
-            scale = widget_h / norm_h
-            offset_x = (widget_w - norm_w * scale) / 2.0
-            offset_y = 0.0
+            scale = widget_h / norm_h; offset_x = (widget_w - norm_w * scale) / 2.0; offset_y = 0.0
         else:
-            scale = widget_w / norm_w
-            offset_x = 0.0
-            offset_y = (widget_h - norm_h * scale) / 2.0
+            scale = widget_w / norm_w; offset_x = 0.0; offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
 
-        # === INVERSE LOGIC ===
-        # 1. Konversi posisi ROS (meter) ke koordinat piksel
+        # Logika kebalikan dari calculate_ros_goal
         pixel_x = (pose['x'] - origin_x) / resolution
         pixel_y = (pose['y'] - origin_y) / resolution
-
-        # 2. Konversi dari piksel ke posisi di dalam widget (termasuk offset)
+        
         pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
         pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
         
@@ -151,8 +128,8 @@ class NavigationScreen(Screen):
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
-        
         kv_design = """
+#:import RiseInTransition kivy.uix.screenmanager.RiseInTransition
 <RobotMarker>:
     canvas.before:
         PushMatrix
@@ -162,7 +139,20 @@ class MainApp(App):
     canvas.after:
         PopMatrix
 <MapImage>:
+# --- LAYAR BARU UNTUK INDIKATOR MEMUAT ---
+<LoadingScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 40
+        spacing: 20
+        Label:
+            text: 'MEMUAT...'
+            font_size: '40sp'
+        Label:
+            text: 'Harap tunggu, sistem sedang dimulai...'
+            font_size: '20sp'
 <NavSelectionScreen>:
+    # ... (tidak ada perubahan di sini) ...
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -190,7 +180,6 @@ class MainApp(App):
         spacing: 10
         FloatLayout:
             id: map_container
-            size_hint: 1, 1
             MapImage:
                 id: map_viewer
                 source: ''
@@ -219,8 +208,12 @@ class MainApp(App):
                 on_press: app.exit_navigation_mode()
 ScreenManager:
     id: sm
+    transition: RiseInTransition()
+    LoadingScreen:
+        name: 'loading'
     Screen:
         name: 'main_menu'
+        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -242,6 +235,7 @@ ScreenManager:
                 on_press: sm.current = 'nav_selection'
     Screen:
         name: 'pre_mapping'
+        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -266,6 +260,7 @@ ScreenManager:
                 on_press: sm.current = 'main_menu'
     Screen:
         name: 'controller'
+        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -280,6 +275,7 @@ ScreenManager:
                 on_press: app.exit_controller_mode()
     Screen:
         name: 'mapping'
+        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -305,53 +301,32 @@ ScreenManager:
         return Builder.load_string(kv_design)
 
     def calculate_ros_goal(self, touch, image_widget):
-        """
-        Fungsi ini 100% menggunakan logika dari file referensi Anda yang akurat.
-        Tidak ada perubahan sama sekali.
-        """
         screen = self.root.get_screen('navigation')
-        
-        if not image_widget.texture or not self.manager.map_metadata:
-            return
-
+        if not image_widget.texture or not self.manager.map_metadata: return
         meta = self.manager.map_metadata
-        resolution = meta['resolution']
-        origin_x = meta['origin'][0]
-        origin_y = meta['origin'][1]
-
+        resolution = meta['resolution']; origin_x = meta['origin'][0]; origin_y = meta['origin'][1]
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
-
         widget_w, widget_h = image_widget.size
-        img_ratio = norm_w / norm_h
-        widget_ratio = widget_w / widget_h
-
+        img_ratio = norm_w / norm_h; widget_ratio = widget_w / widget_h
         if widget_ratio > img_ratio:
-            scale = widget_h / norm_h
-            offset_x = (widget_w - norm_w * scale) / 2.0
-            offset_y = 0.0
+            scale = widget_h / norm_h; offset_x = (widget_w - norm_w * scale) / 2.0; offset_y = 0.0
         else:
-            scale = widget_w / norm_w
-            offset_x = 0.0
-            offset_y = (widget_h - norm_h * scale) / 2.0
-        
+            scale = widget_w / norm_w; offset_x = 0.0; offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
-
-        # Kalkulasi ini menggunakan `touch.pos` (lokal) dan `offset` dari logika Anda
-        # Pengurangan `image_widget.x` dan `image_widget.y` tetap dipertahankan
-        # sesuai referensi akurat Anda.
-        touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
-        touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
+        touch_on_image_x = touch.pos[0] - offset_x
+        touch_on_image_y = touch.pos[1] - offset_y
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
         
-        # Konversi piksel ke koordinat dunia ROS (meter)
+        if not (0 <= pixel_x <= norm_w and 0 <= pixel_y <= norm_h): return
+
+        flipped_pixel_y = norm_h - pixel_y
         map_x = (pixel_x * resolution) + origin_x
-        map_y = (pixel_y * resolution) + origin_y
+        map_y = (flipped_pixel_y * resolution) + origin_y
         
         screen.selected_goal_coords = (map_x, map_y)
-        
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
 
@@ -359,32 +334,45 @@ ScreenManager:
         screen = self.root.get_screen('navigation')
         if screen.selected_goal_coords:
             map_x, map_y = screen.selected_goal_coords
-            
             goal_msg_yaml = f"""header:
   stamp: now
   frame_id: "map"
 pose:
-  position:
-    x: {map_x}
-    y: {map_y}
-    z: 0.0
-  orientation:
-    x: 0.0
-    y: 0.0
-    z: 0.0
-    w: 1.0"""
-
+  position: {{x: {map_x}, y: {map_y}, z: 0.0}}
+  orientation: {{x: 0.0, y: 0.0, z: 0.0, w: 1.0}}"""
             command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
             try:
                 subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim ke /move_base_simple/goal")
-            except Exception as e:
-                print(f"ERROR: Gagal mengirim perintah goal: {e}")
-            
+                print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim.")
+            except Exception as e: print(f"ERROR: Gagal mengirim perintah goal: {e}")
             screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # --- Sisa fungsi tidak diubah ---
+    # --- Fungsi Asinkron Baru ---
+    def start_navigation_with_map(self, map_name, *args):
+        self.root.current = 'loading'
+        self.manager.start_navigation_async(map_name, lambda s, m: self.on_start_process_finished(s, m, 'navigation'))
+
+    def go_to_mapping_mode(self, map_name):
+        if not map_name.strip():
+            self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
+            return
+        self.root.current = 'loading'
+        self.manager.start_mapping_async(map_name, lambda s, m: self.on_start_process_finished(s, m, 'mapping', map_name))
+
+    @mainthread
+    def on_start_process_finished(self, success, message, target_screen, map_name=None):
+        if success:
+            print(f"INFO: {message}")
+            if target_screen == 'mapping':
+                self.update_mapping_labels(message, map_name)
+            self.root.current = target_screen
+        else:
+            print(f"FATAL: {message}")
+            # Opsional: Tampilkan Popup error di sini
+            self.root.current = 'main_menu'
+
+    # --- Sisa fungsi tidak perlu diubah ---
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -393,14 +381,6 @@ pose:
     def exit_controller_mode(self):
         self.manager.stop_controller()
         self.root.current = 'main_menu'
-
-    def go_to_mapping_mode(self, map_name):
-        if not map_name.strip():
-            self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
-            return
-        status = self.manager.start_mapping(map_name)
-        self.root.current = 'mapping'
-        Clock.schedule_once(lambda dt: self.update_mapping_labels(status, map_name), 0.1)
 
     def update_mapping_labels(self, status, map_name):
         screen = self.root.get_screen('mapping')
@@ -414,10 +394,6 @@ pose:
     def _finish_exit_mapping(self, dt):
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
-
-    def start_navigation_with_map(self, map_name, *args):
-        self.manager.start_navigation(map_name)
-        self.root.current = 'navigation'
 
     def exit_navigation_mode(self):
         self.manager.stop_navigation()
@@ -433,8 +409,7 @@ pose:
                 screen = self.root.get_screen(screen_name)
                 if screen and label_id in screen.ids:
                     screen.ids[label_id].text = new_text
-            except Exception as e:
-                print(f"Gagal update GUI: {e}")
+            except Exception as e: print(f"Gagal update GUI: {e}")
 
 if __name__ == '__main__':
     MainApp().run()
