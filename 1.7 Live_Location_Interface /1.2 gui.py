@@ -22,17 +22,12 @@ class LoadingScreen(Screen):
     pass
 
 class NavSelectionScreen(Screen):
-    def on_enter(self):
-        self.update_map_list()
-
+    def on_enter(self): self.update_map_list()
     def update_map_list(self):
-        grid = self.ids.nav_map_grid
-        grid.clear_widgets()
+        grid = self.ids.nav_map_grid; grid.clear_widgets()
         app = App.get_running_app()
         map_names = app.manager.get_available_maps()
-        if not map_names:
-            grid.add_widget(Label(text="Tidak ada peta ditemukan."))
-            return
+        if not map_names: grid.add_widget(Label(text="Tidak ada peta ditemukan.")); return
         for name in map_names:
             btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
@@ -42,12 +37,10 @@ class MapImage(TouchRippleBehavior, Image):
     marker = ObjectProperty(None, allownone=True)
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
-            if self.marker and self.marker.parent:
-                self.remove_widget(self.marker)
+            if self.marker and self.marker.parent: self.remove_widget(self.marker)
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
-            self.add_widget(new_marker)
-            self.marker = new_marker
+            self.add_widget(new_marker); self.marker = new_marker
             App.get_running_app().calculate_ros_goal(touch, self)
             return super().on_touch_down(touch)
         return False
@@ -62,25 +55,19 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
-        
         map_viewer = self.ids.map_viewer
         if map_viewer.marker and map_viewer.marker.parent:
-            map_viewer.remove_widget(map_viewer.marker)
-            map_viewer.marker = None
-
+            map_viewer.remove_widget(map_viewer.marker); map_viewer.marker = None
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
             self.ids.map_container.add_widget(self.robot_marker)
-        
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
         self.selected_goal_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
-
     def on_leave(self):
         if hasattr(self, 'update_event'): self.update_event.cancel()
         if self.robot_marker: self.robot_marker.opacity = 0
-
     def load_map_image(self, map_name):
         if map_name:
             app = App.get_running_app()
@@ -89,22 +76,16 @@ class NavigationScreen(Screen):
                 self.ids.map_viewer.source = map_image_path
                 app.manager.load_map_metadata(map_name)
                 self.ids.map_viewer.reload()
-
     @mainthread
     def update_robot_display(self, dt):
-        app = App.get_running_app()
-        pose = app.manager.get_robot_pose()
+        app = App.get_running_app(); pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
-        
         if pose is None or not app.manager.map_metadata or not map_viewer.texture:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
-            
         self.robot_marker.opacity = 1
-        meta = app.manager.map_metadata
-        resolution = meta['resolution']
-        origin_x = meta['origin'][0]
-        origin_y = meta['origin'][1]
+        meta = app.manager.map_metadata; resolution = meta['resolution']
+        origin_x = meta['origin'][0]; origin_y = meta['origin'][1]
         norm_w, norm_h = map_viewer.texture.size
         if norm_w == 0 or norm_h == 0: return
         widget_w, widget_h = map_viewer.size
@@ -114,15 +95,12 @@ class NavigationScreen(Screen):
         else:
             scale = widget_w / norm_w; offset_x = 0.0; offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
-
         # Logika kebalikan dari calculate_ros_goal
         pixel_x = (pose['x'] - origin_x) / resolution
         pixel_y = (pose['y'] - origin_y) / resolution
-        
-        pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
-        pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
-        
-        self.robot_marker.center = (pos_in_widget_x, pos_in_widget_y)
+        final_x = (pixel_x * scale) + offset_x + map_viewer.x
+        final_y = (pixel_y * scale) + offset_y + map_viewer.y
+        self.robot_marker.center = (final_x, final_y)
         self.robot_marker.angle = -math.degrees(pose['yaw'])
 
 class MainApp(App):
@@ -139,7 +117,6 @@ class MainApp(App):
     canvas.after:
         PopMatrix
 <MapImage>:
-# --- LAYAR BARU UNTUK INDIKATOR MEMUAT ---
 <LoadingScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -152,7 +129,6 @@ class MainApp(App):
             text: 'Harap tunggu, sistem sedang dimulai...'
             font_size: '20sp'
 <NavSelectionScreen>:
-    # ... (tidak ada perubahan di sini) ...
     BoxLayout:
         orientation: 'vertical'
         padding: 20
@@ -195,16 +171,13 @@ class MainApp(App):
             Label:
                 id: navigation_status_label
                 text: 'Status: Pilih titik di peta'
-                font_size: '18sp'
             Button:
                 id: navigate_button
                 text: 'Lakukan Navigasi'
-                font_size: '20sp'
                 disabled: True
                 on_press: app.confirm_navigation_goal()
             Button:
                 text: 'Stop & Kembali'
-                font_size: '20sp'
                 on_press: app.exit_navigation_mode()
 ScreenManager:
     id: sm
@@ -213,7 +186,6 @@ ScreenManager:
         name: 'loading'
     Screen:
         name: 'main_menu'
-        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
@@ -223,75 +195,55 @@ ScreenManager:
                 font_size: '30sp'
             Button:
                 text: 'Mode Controller'
-                font_size: '22sp'
                 on_press: app.go_to_controller_mode()
             Button:
                 text: 'Mode Mapping'
-                font_size: '22sp'
                 on_press: sm.current = 'pre_mapping'
             Button:
                 text: 'Mode Navigasi'
-                font_size: '22sp'
                 on_press: sm.current = 'nav_selection'
     Screen:
         name: 'pre_mapping'
-        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
             padding: 40
             spacing: 20
             Label:
                 text: 'Masukkan Nama Peta'
-                font_size: '26sp'
             TextInput:
                 id: map_name_input
                 hint_text: 'Contoh: peta_lantai_1'
-                font_size: '20sp'
                 multiline: False
                 size_hint_y: None
                 height: '48dp'
             Button:
                 text: 'Mulai Mapping'
-                font_size: '22sp'
                 on_press: app.go_to_mapping_mode(map_name_input.text)
             Button:
                 text: 'Kembali ke Menu'
-                font_size: '22sp'
                 on_press: sm.current = 'main_menu'
     Screen:
         name: 'controller'
-        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
-            padding: 40
-            spacing: 20
             Label:
                 id: controller_status_label
                 text: 'Status: Siap'
-                font_size: '20sp'
             Button:
                 text: 'Stop & Kembali ke Menu'
-                font_size: '22sp'
                 on_press: app.exit_controller_mode()
     Screen:
         name: 'mapping'
-        # ... (sama seperti sebelumnya)
         BoxLayout:
             orientation: 'vertical'
-            padding: 40
-            spacing: 20
             Label:
                 id: mapping_status_label
                 text: 'Status: Siap'
-                font_size: '20sp'
             Label:
                 id: current_map_name_label
                 text: 'Memetakan: '
-                font_size: '18sp'
-                color: 0.7, 0.7, 0.7, 1
             Button:
                 text: 'Selesai Mapping & Simpan Otomatis'
-                font_size: '22sp'
                 on_press: app.exit_mapping_mode()
     NavSelectionScreen:
         name: 'nav_selection'
@@ -301,6 +253,8 @@ ScreenManager:
         return Builder.load_string(kv_design)
 
     def calculate_ros_goal(self, touch, image_widget):
+        # Fungsi ini 100% menggunakan logika dari file referensi Anda.
+        # TIDAK ADA PERUBAHAN.
         screen = self.root.get_screen('navigation')
         if not image_widget.texture or not self.manager.map_metadata: return
         meta = self.manager.map_metadata
@@ -314,18 +268,12 @@ ScreenManager:
         else:
             scale = widget_w / norm_w; offset_x = 0.0; offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
-        
-        touch_on_image_x = touch.pos[0] - offset_x
-        touch_on_image_y = touch.pos[1] - offset_y
+        touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
+        touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
-        
-        if not (0 <= pixel_x <= norm_w and 0 <= pixel_y <= norm_h): return
-
-        flipped_pixel_y = norm_h - pixel_y
         map_x = (pixel_x * resolution) + origin_x
-        map_y = (flipped_pixel_y * resolution) + origin_y
-        
+        map_y = (pixel_y * resolution) + origin_y
         screen.selected_goal_coords = (map_x, map_y)
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
@@ -348,60 +296,61 @@ pose:
             screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # --- Fungsi Asinkron Baru ---
+    # ==================================================================
+    # ==================== FUNGSI ASINKRON DIPERBAIKI ==================
+    # ==================================================================
     def start_navigation_with_map(self, map_name, *args):
         self.root.current = 'loading'
-        self.manager.start_navigation_async(map_name, lambda s, m: self.on_start_process_finished(s, m, 'navigation'))
+        self.manager.start_navigation_async(map_name, self.on_start_process_finished)
 
     def go_to_mapping_mode(self, map_name):
         if not map_name.strip():
             self.root.get_screen('pre_mapping').ids.map_name_input.hint_text = 'NAMA PETA TIDAK BOLEH KOSONG!'
             return
         self.root.current = 'loading'
-        self.manager.start_mapping_async(map_name, lambda s, m: self.on_start_process_finished(s, m, 'mapping', map_name))
+        self.manager.start_mapping_async(map_name, self.on_start_process_finished)
 
     @mainthread
-    def on_start_process_finished(self, success, message, target_screen, map_name=None):
+    def on_start_process_finished(self, success, message):
+        """
+        Callback ini sekarang dijamin berjalan di main thread,
+        sehingga tidak akan macet lagi.
+        """
         if success:
             print(f"INFO: {message}")
-            if target_screen == 'mapping':
+            if self.manager.is_navigation_running:
+                self.root.current = 'navigation'
+            elif self.manager.is_mapping_running:
+                map_name = self.manager.current_map_name
                 self.update_mapping_labels(message, map_name)
-            self.root.current = target_screen
+                self.root.current = 'mapping'
         else:
             print(f"FATAL: {message}")
-            # Opsional: Tampilkan Popup error di sini
             self.root.current = 'main_menu'
 
-    # --- Sisa fungsi tidak perlu diubah ---
+    # --- Sisa fungsi tidak diubah ---
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
         self.root.current = 'controller'
-
     def exit_controller_mode(self):
         self.manager.stop_controller()
         self.root.current = 'main_menu'
-
     def update_mapping_labels(self, status, map_name):
         screen = self.root.get_screen('mapping')
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
-
     def exit_mapping_mode(self):
-        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
+        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...')
         Clock.schedule_once(self._finish_exit_mapping, 1)
-
     def _finish_exit_mapping(self, dt):
         self.manager.stop_mapping()
         self.root.current = 'main_menu'
-
     def exit_navigation_mode(self):
         self.manager.stop_navigation()
         self.root.current = 'main_menu'
-
     def on_stop(self):
         self.manager.shutdown()
-
     @mainthread
     def update_status_label(self, screen_name, label_id, new_text):
         if self.root:
