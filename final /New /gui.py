@@ -251,17 +251,15 @@ class MainApp(App):
             on_press:
                 app.root.current = 'main_menu'
 
-# <-- MODIFIKASI DIMULAI DI SINI
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
         spacing: 10
         
-        # LABEL DIGANTI DENGAN IMAGE
         Image:
-            source: 'choose_your_mission.png'
-            size_hint_y: 0.2  # Sedikit lebih besar dari 0.15 agar gambar pas
+            source: 'Choose_your_mission.png' 
+            size_hint_y: 0.2
             allow_stretch: True
             keep_ratio: True
             
@@ -272,11 +270,14 @@ class MainApp(App):
                 size_hint_y: None
                 height: self.minimum_height
                 spacing: 10
-        Button:
-            text: 'Kembali ke Menu'
-            size_hint_y: 0.15
+        
+        # <-- 1. PERUBAHAN DI NAV SELECTION
+        ImageButton:
+            source: 'go_back.png'
+            size_hint_y: None  # Matikan size_hint_y
+            height: '70dp'     # Atur tinggi tetap (misal 70dp)
+            # size_hint_x: 1 (default) akan membuatnya mengisi lebar, ini OK
             on_press: root.manager.current = 'main_menu'
-# <-- MODIFIKASI SELESAI
             
 <NavigationScreen>:
     name: 'navigation'
@@ -309,9 +310,13 @@ class MainApp(App):
                 font_size: '20sp'
                 disabled: True
                 on_press: app.confirm_navigation_goal()
-            Button:
-                text: 'Stop & Kembali'
-                font_size: '20sp'
+            
+            # <-- 2. PERUBAHAN DI NAVIGATION SCREEN
+            ImageButton:
+                source: 'go_back.png'
+                size_hint_x: None   # Matikan size_hint_x
+                width: '160dp'      # Atur lebar tetap (misal 160dp)
+                # Tinggi akan mengikuti tinggi BoxLayout (60dp)
                 on_press: app.exit_navigation_mode()
 
 # ==================================
@@ -369,6 +374,7 @@ ScreenManager:
                 text: 'Kembali ke Menu'
                 font_size: '22sp'
                 on_press: sm.current = 'main_menu'
+                
     Screen:
         name: 'controller'
         BoxLayout:
@@ -379,10 +385,14 @@ ScreenManager:
                 id: controller_status_label
                 text: 'Status: Siap'
                 font_size: '20sp'
-            Button:
-                text: 'Stop & Kembali ke Menu'
-                font_size: '22sp'
+                
+            # <-- 3. PERUBAHAN DI CONTROLLER SCREEN
+            ImageButton:
+                source: 'go_back.png'
+                size_hint_y: None # Matikan size_hint_y
+                height: '70dp'    # Atur tinggi tetap (sama seperti no 1)
                 on_press: app.exit_controller_mode()
+                
     Screen:
         name: 'mapping'
         BoxLayout:
