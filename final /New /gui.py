@@ -271,12 +271,10 @@ class MainApp(App):
                 height: self.minimum_height
                 spacing: 10
         
-        # <-- 1. PERUBAHAN DI NAV SELECTION
+        # <-- 1. PERUBAHAN DI NAV SELECTION SCREEN
         ImageButton:
             source: 'go_back.png'
-            size_hint_y: None  # Matikan size_hint_y
-            height: '70dp'     # Atur tinggi tetap (misal 70dp)
-            # size_hint_x: 1 (default) akan membuatnya mengisi lebar, ini OK
+            size_hint_y: 0.15 # Biarkan ukuran sama seperti tombol sebelumnya
             on_press: root.manager.current = 'main_menu'
             
 <NavigationScreen>:
@@ -314,9 +312,7 @@ class MainApp(App):
             # <-- 2. PERUBAHAN DI NAVIGATION SCREEN
             ImageButton:
                 source: 'go_back.png'
-                size_hint_x: None   # Matikan size_hint_x
-                width: '160dp'      # Atur lebar tetap (misal 160dp)
-                # Tinggi akan mengikuti tinggi BoxLayout (60dp)
+                # Hapus font_size, ganti text dengan source
                 on_press: app.exit_navigation_mode()
 
 # ==================================
@@ -389,8 +385,9 @@ ScreenManager:
             # <-- 3. PERUBAHAN DI CONTROLLER SCREEN
             ImageButton:
                 source: 'go_back.png'
-                size_hint_y: None # Matikan size_hint_y
-                height: '70dp'    # Atur tinggi tetap (sama seperti no 1)
+                # Ganti text dan font_size dengan source
+                size_hint_y: None # Buat ukurannya tidak stretch
+                height: '60dp'     # Beri tinggi yang pasti
                 on_press: app.exit_controller_mode()
                 
     Screen:
