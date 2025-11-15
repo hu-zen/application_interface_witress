@@ -11,7 +11,7 @@ from functools import partial
 from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior
 from kivy.properties import ObjectProperty, NumericProperty
-from kivy.core.window import Window  # <-- 1. IMPORT WINDOW
+from kivy.core.window import Window
 import yaml
 import math
 import os
@@ -29,11 +29,9 @@ class NavSelectionScreen(Screen):
         app = App.get_running_app()
         map_names = app.manager.get_available_maps()
         if not map_names:
-            # Pastikan label "Tidak ada peta" juga hitam
             grid.add_widget(Label(text="Tidak ada peta ditemukan.", color=(0,0,0,1)))
             return
         for name in map_names:
-            # Tombol akan diatur warnanya oleh aturan KV
             btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
@@ -50,7 +48,6 @@ class MapImage(TouchRippleBehavior, Image):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Tanda 'X' ini sudah berwarna merah (1,0,0,1), jadi AMAN di latar putih
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -154,7 +151,7 @@ class NavigationScreen(Screen):
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
-        Window.maximize()  # <-- 2. SET JENDELA MENJADI MAXIMIZE
+        Window.maximize()
         
         kv_design = """
 # ==================================
@@ -172,14 +169,13 @@ class MainApp(App):
     color: 0, 0, 0, 1  # Teks default HITAM
 
 <Button>:
-    color: 0, 0, 0, 1  # Teks default tombol HITAM
-    # Beri sedikit warna pada tombol agar tidak menyatu dengan latar
-    background_color: 0.85, 0.85, 0.85, 1 
-    background_normal: '' # Hapus background default
+    color: 1, 1, 1, 1  # <-- TEKS TOMBOL JADI PUTIH
+    background_color: 0.3, 0.3, 0.3, 1 # <-- BACKGROUND ABU-ABU GELAP
+    background_normal: '' 
 
 <TextInput>:
-    foreground_color: 0, 0, 0, 1 # Teks saat mengetik HITAM
-    background_color: 0.9, 0.9, 0.9, 1 # Latar TextInput abu-abu muda
+    foreground_color: 0, 0, 0, 1 
+    background_color: 0.9, 0.9, 0.9, 1 
     
 # ==================================
 # ATURAN YANG SUDAH ADA
@@ -259,7 +255,7 @@ ScreenManager:
             Label:
                 text: 'Waiter Bot Control Center'
                 font_size: '30sp'
-                bold: True  # Dibuat bold agar menonjol
+                bold: True
             Button:
                 text: 'Mode Controller'
                 font_size: '22sp'
@@ -324,7 +320,6 @@ ScreenManager:
                 id: current_map_name_label
                 text: 'Memetakan: '
                 font_size: '18sp'
-                # Ubah warna ini dari 0.7 (terlalu terang) jadi 0.4 (abu-abu gelap)
                 color: 0.4, 0.4, 0.4, 1
             Button:
                 text: 'Selesai Mapping & Simpan Otomatis'
