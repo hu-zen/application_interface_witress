@@ -1,0 +1,30 @@
+bagaimana jika menggunakan file png saya menjadi button, jadi dari program saya sebelumnya, sebelum masuk ke 3 mode utama. kita buat tampilan home saja dahulu, jadi ada 2 gambar, 1. home.png sebagai tampilan saja, 2. start.png ketika ditekan nanti masuk ke 3 mode utama
+<HomeScreen>:
+    name:
+    FloatLayout:
+
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1      # PUTIH penuh
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Image:
+            source: 'home.png'
+            size_hint: None, None
+            width: root.width * 0.58      # 40% dari lebar window
+            height: root.height * 0.58    # 40% dari tinggi window
+            pos_hint: {"center_x": 0.5, "center_y": 0.65}  # diposisikan sedikit ke atas
+            allow_stretch: True
+            keep_ratio: True
+
+        # START BUTTON
+        ImageButton:
+            source: 'start.png'
+            size_hint: None, None
+            width: root.width * 0.4
+            height: root.height * 0.4
+            pos_hint: {"center_x": 0.5, "center_y": 0.20}
+            on_press:
+                app.root.current = 'main_menu'
+
