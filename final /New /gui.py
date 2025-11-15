@@ -9,7 +9,7 @@ from kivy.uix.label import Label
 from kivy.clock import mainthread, Clock
 from functools import partial
 from kivy.uix.image import Image
-from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior  # <-- IMPORT DITAMBAHKAN
+from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
 import yaml
@@ -23,7 +23,7 @@ from manager import RosManager
 # KELAS LAYAR
 # ==================================
 
-class HomeScreen(Screen):  # <-- KELAS BARU DITAMBAHKAN
+class HomeScreen(Screen):
     pass
 
 class NavSelectionScreen(Screen):
@@ -43,7 +43,7 @@ class NavSelectionScreen(Screen):
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
-class ImageButton(ButtonBehavior, Image):  # <-- KELAS BARU DITAMBAHKAN
+class ImageButton(ButtonBehavior, Image):
     pass
 
 class MapImage(TouchRippleBehavior, Image):
@@ -224,7 +224,6 @@ class MainApp(App):
 # LAYOUT LAYAR (BARU & LAMA)
 # ==================================
 
-# <-- LAYAR BARU (DARI KODE ANDA)
 <HomeScreen>:
     FloatLayout:
         canvas.before:
@@ -252,16 +251,20 @@ class MainApp(App):
             on_press:
                 app.root.current = 'main_menu'
 
-# <-- LAYAR LAMA
+# <-- MODIFIKASI DIMULAI DI SINI
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
         spacing: 10
-        Label:
-            text: 'Pilih Peta untuk Navigasi'
-            font_size: '24sp'
-            size_hint_y: 0.15
+        
+        # LABEL DIGANTI DENGAN IMAGE
+        Image:
+            source: 'choose_your_mission.png'
+            size_hint_y: 0.2  # Sedikit lebih besar dari 0.15 agar gambar pas
+            allow_stretch: True
+            keep_ratio: True
+            
         ScrollView:
             GridLayout:
                 id: nav_map_grid
@@ -273,6 +276,7 @@ class MainApp(App):
             text: 'Kembali ke Menu'
             size_hint_y: 0.15
             on_press: root.manager.current = 'main_menu'
+# <-- MODIFIKASI SELESAI
             
 <NavigationScreen>:
     name: 'navigation'
@@ -316,7 +320,7 @@ class MainApp(App):
 ScreenManager:
     id: sm
     
-    HomeScreen:  # <-- MENJADI LAYAR PERTAMA
+    HomeScreen:
         name: 'home' 
         
     Screen:
