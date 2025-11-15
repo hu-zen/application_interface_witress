@@ -9,7 +9,7 @@ from kivy.uix.label import Label
 from kivy.clock import mainthread, Clock
 from functools import partial
 from kivy.uix.image import Image
-from kivy.uix.behaviors import TouchRippleBehavior
+from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior  # <-- IMPORT DITAMBAHKAN
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
 import yaml
@@ -18,6 +18,13 @@ import os
 import subprocess
 
 from manager import RosManager
+
+# ==================================
+# KELAS LAYAR
+# ==================================
+
+class HomeScreen(Screen):  # <-- KELAS BARU DITAMBAHKAN
+    pass
 
 class NavSelectionScreen(Screen):
     def on_enter(self):
@@ -35,6 +42,9 @@ class NavSelectionScreen(Screen):
             btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
+
+class ImageButton(ButtonBehavior, Image):  # <-- KELAS BARU DITAMBAHKAN
+    pass
 
 class MapImage(TouchRippleBehavior, Image):
     """
@@ -148,6 +158,9 @@ class NavigationScreen(Screen):
         self.robot_marker.center = (pos_in_widget_x, pos_in_widget_y)
         self.robot_marker.angle = -math.degrees(pose['yaw'])
 
+# ==================================
+# KELAS APLIKASI UTAMA
+# ==================================
 class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
@@ -155,7 +168,7 @@ class MainApp(App):
         
         kv_design = """
 # ==================================
-# ATURAN GLOBAL (BARU)
+# ATURAN GLOBAL
 # ==================================
 <Screen>:
     canvas.before:
@@ -169,16 +182,33 @@ class MainApp(App):
     color: 0, 0, 0, 1  # Teks default HITAM
 
 <Button>:
-    color: 1, 1, 1, 1  # <-- TEKS TOMBOL JADI PUTIH
-    background_color: 0.3, 0.3, 0.3, 1 # <-- BACKGROUND ABU-ABU GELAP
+    color: 1, 1, 1, 1  # TEKS TOMBOL PUTIH
+    background_color: 0.3, 0.3, 0.3, 1 # BACKGROUND ABU-ABU GELAP
     background_normal: '' 
 
 <TextInput>:
     foreground_color: 0, 0, 0, 1 
     background_color: 0.9, 0.9, 0.9, 1 
-    
+
 # ==================================
-# ATURAN YANG SUDAH ADA
+# ATURAN STYLE BARU
+# ==================================
+<ImageButton>:
+    # Membuat tombol gambar transparan
+    background_color: 1, 1, 1, 0 
+    background_normal: ''
+    allow_stretch: True
+    keep_ratio: True
+    # Menambahkan efek visual "ditekan" (menjadi sedikit gelap)
+    canvas.after:
+        Color:
+            rgba: 0, 0, 0, 0.3 if self.state == 'down' else 0
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+# ==================================
+# ATURAN WIDGET CUSTOM
 # ==================================
 <RobotMarker>:
     canvas.before:
@@ -189,6 +219,40 @@ class MainApp(App):
     canvas.after:
         PopMatrix
 <MapImage>:
+    
+# ==================================
+# LAYOUT LAYAR (BARU & LAMA)
+# ==================================
+
+# <-- LAYAR BARU (DARI KODE ANDA)
+<HomeScreen>:
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 1, 1, 1      # PUTIH penuh
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Image:
+            source: 'home.png'
+            size_hint: None, None
+            width: root.width * 0.58
+            height: root.height * 0.58
+            pos_hint: {"center_x": 0.5, "center_y": 0.65}
+            allow_stretch: True
+            keep_ratio: True
+
+        # START BUTTON
+        ImageButton:
+            source: 'start.png'
+            size_hint: None, None
+            width: root.width * 0.4
+            height: root.height * 0.4
+            pos_hint: {"center_x": 0.5, "center_y": 0.20}
+            on_press:
+                app.root.current = 'main_menu'
+
+# <-- LAYAR LAMA
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -209,6 +273,7 @@ class MainApp(App):
             text: 'Kembali ke Menu'
             size_hint_y: 0.15
             on_press: root.manager.current = 'main_menu'
+            
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -244,8 +309,16 @@ class MainApp(App):
                 text: 'Stop & Kembali'
                 font_size: '20sp'
                 on_press: app.exit_navigation_mode()
+
+# ==================================
+# SCREEN MANAGER UTAMA
+# ==================================
 ScreenManager:
     id: sm
+    
+    HomeScreen:  # <-- MENJADI LAYAR PERTAMA
+        name: 'home' 
+        
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -331,6 +404,10 @@ ScreenManager:
         name: 'navigation'
 """
         return Builder.load_string(kv_design)
+
+    # ==================================
+    # FUNGSI-FUNGSI LOGIKA (TIDAK BERUBAH)
+    # ==================================
 
     def calculate_ros_goal(self, touch, image_widget):
         """
