@@ -12,7 +12,13 @@ from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
-from kivy.uix.widget import Widget # Diperlukan untuk Spacer D-Pad
+from kivy.uix.widget import Widget 
+
+# [ --- PERUBAHAN 1 DI SINI --- ]
+# Kita perlu 'Matrix' untuk menggeser (pan) Scatter dengan benar
+from kivy.graphics.transformation import Matrix
+# [ --------------------------- ]
+
 import yaml
 import math
 import os
@@ -50,20 +56,13 @@ class ImageButton(ButtonBehavior, Image):
 
 # Kelas MapImage kembali seperti original, TIDAK diubah
 class MapImage(TouchRippleBehavior, Image):
-    """
-    Kelas ini menggunakan logika on_touch_down dari referensi Anda.
-    Tidak ada yang diubah sama sekali.
-    """
     marker = ObjectProperty(None, allownone=True)
 
     def on_touch_down(self, touch):
-        # Logika on_touch_down ini sudah benar dan akan bekerja
-        # di dalam Scatter karena `touch.pos` adalah koordinat global.
         if self.collide_point(*touch.pos):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Baris ini SUDAH BENAR di kode Anda (bold=True)
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -93,18 +92,18 @@ class NavigationScreen(Screen):
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
-            
             self.ids.scatter_map.add_widget(self.robot_marker)
         
-        # Reset zoom/pan saat masuk layar
-        self.ids.scatter_map.scale = 1.0
-        self.ids.scatter_map.pos = self.ids.map_container.pos
+        # [ --- PERUBAHAN 2 DI SINI --- ]
+        # Reset zoom DAN transform (pan) saat masuk layar
+        scatter = self.ids.scatter_map
+        scatter.scale = 1.0
+        scatter.transform = Matrix() # Reset pan/geser ke posisi awal
+        # [ --------------------------- ]
         
-        # [ --- PERUBAHAN 1 DI SINI --- ]
         # Sembunyikan D-Pad saat pertama kali masuk
         self.ids.dpad_layout.opacity = 0
         self.ids.dpad_layout.disabled = True
-        # [ --------------------------- ]
 
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
         self.selected_goal_coords = None
@@ -136,19 +135,15 @@ class NavigationScreen(Screen):
             return
             
         self.robot_marker.opacity = 1
-        
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
-
         norm_w, norm_h = map_viewer.texture.size
         if norm_w == 0 or norm_h == 0: return
-
         widget_w, widget_h = map_viewer.size
         img_ratio = norm_w / norm_h
         widget_ratio = widget_w / widget_h
-
         if widget_ratio > img_ratio:
             scale = widget_h / norm_h
             offset_x = (widget_w - norm_w * scale) / 2.0
@@ -158,16 +153,12 @@ class NavigationScreen(Screen):
             offset_x = 0.0
             offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
-
         pixel_x = (pose['x'] - origin_x) / resolution
         pixel_y = (pose['y'] - origin_y) / resolution
-
         pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
         pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
-        
         scatter = self.ids.scatter_map
         local_pos = scatter.to_local(pos_in_widget_x, pos_in_widget_y)
-        
         self.robot_marker.center = local_pos
         self.robot_marker.angle = -math.degrees(pose['yaw'])
 
@@ -316,12 +307,7 @@ class MainApp(App):
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
                 do_rotation: False
                 do_scale: True
-                
-                # [ --- PERUBAHAN 2 DI SINI --- ]
-                # Mematikan geser manual (hanya bisa via D-Pad)
-                do_translation: False 
-                # [ --------------------------- ]
-
+                do_translation: False # Geser manual (touch) DIMATIKAN
                 scale_min: 1.0
                 scale_max: 8.0
                 auto_bring_to_front: False
@@ -350,35 +336,33 @@ class MainApp(App):
             
             # --- TOMBOL PAN D-PAD (Kiri) ---
             GridLayout:
-                # [ --- PERUBAHAN 3 DI SINI --- ]
-                # Menambahkan ID untuk D-Pad
                 id: dpad_layout
-                # [ --------------------------- ]
-                
                 cols: 3
                 size_hint: (None, None)
                 size: ('180dp', '180dp') 
                 pos_hint: {'left': 0.02, 'center_y': 0.5}
                 spacing: 5 
 
+                # [ --- PERUBAHAN 3 DI SINI (Teks Tombol) --- ]
                 Widget: 
                 MapControlButton:
-                    text: "▲" 
+                    text: "^" # Panah Atas
                     on_press: app.pan_map_up()
                 Widget: 
                 MapControlButton:
-                    text: "◄" 
+                    text: "<" # Panah Kiri
                     on_press: app.pan_map_left()
                 Widget: 
                 MapControlButton:
-                    text: "►" 
+                    text: ">" # Panah Kanan
                     on_press: app.pan_map_right()
                 Widget: 
                 MapControlButton:
-                    text: "▼" 
+                    text: "v" # Panah Bawah
                     on_press: app.pan_map_down()
-                Widget: 
-            
+                Widget:
+                # [ --------------------------------------- ]
+
         # Bagian tombol bawah (Status, Navigasi, Back)
         BoxLayout:
             size_hint_y: None
@@ -519,65 +503,65 @@ ScreenManager:
         except Exception:
             return None
 
-    # --- FUNGSI ZOOM (Sudah ada) ---
+    # --- FUNGSI ZOOM (Logika D-Pad ditambahkan) ---
     def zoom_in(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # [ --- PERUBAHAN 4 DI SINI --- ]
-            # Dapatkan akses ke layar navigasi
             root_screen = self.root.get_screen('navigation')
-            
             scatter.scale = min(scatter.scale * 1.2, scatter.scale_max)
             
             # MUNCULKAN dan AKTIFKAN D-Pad
             root_screen.ids.dpad_layout.opacity = 1.0
             root_screen.ids.dpad_layout.disabled = False
-            # [ --------------------------- ]
 
     def zoom_out(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # [ --- PERUBAHAN 5 DI SINI --- ]
-            # Dapatkan akses ke layar navigasi
             root_screen = self.root.get_screen('navigation')
-
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
             
             # Jika zoom kembali ke minimum
             if scatter.scale <= 1.0:
-                scatter.scale = 1.0 # Paksa ke 1.0
+                scatter.scale = 1.0 
                 # SEMBUNYIKAN dan NON-AKTIFKAN D-Pad
                 root_screen.ids.dpad_layout.opacity = 0.0
                 root_screen.ids.dpad_layout.disabled = True
-                # RESET posisi peta ke tengah
-                scatter.pos = root_screen.ids.map_container.pos
-            # [ --------------------------- ]
+                
+                # [ --- PERUBAHAN 4 DI SINI (Reset Pan) --- ]
+                # RESET transform (pan) ke posisi awal
+                scatter.transform = Matrix()
+                # [ --------------------------------------- ]
             
-    # --- FUNGSI-FUNGSI PAN (Sama seperti sebelumnya, tidak diubah) ---
+    # [ --- PERUBAHAN 5 DI SINI (Logika Pan Diperbaiki) --- ]
+    # --- FUNGSI-FUNGSI PAN (Menggunakan Matrix Transform) ---
     def pan_map_up(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke atas berarti mengurangi Y
-            scatter.y -= self.PAN_STEP
+            # Menggeser ke atas = translate Y positif
+            translation = Matrix().translate(0, self.PAN_STEP, 0)
+            scatter.transform = translation.multiply(scatter.transform)
 
     def pan_map_down(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke bawah berarti menambah Y
-            scatter.y += self.PAN_STEP
+            # Menggeser ke bawah = translate Y negatif
+            translation = Matrix().translate(0, -self.PAN_STEP, 0)
+            scatter.transform = translation.multiply(scatter.transform)
 
     def pan_map_left(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke kiri berarti menambah X
-            scatter.x += self.PAN_STEP
+            # Menggeser ke kiri = translate X negatif
+            translation = Matrix().translate(-self.PAN_STEP, 0, 0)
+            scatter.transform = translation.multiply(scatter.transform)
 
     def pan_map_right(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke kanan berarti mengurangi X
-            scatter.x -= self.PAN_STEP
-    # --- Akhir Fungsi Pan ---
+            # Menggeser ke kanan = translate X positif
+            translation = Matrix().translate(self.PAN_STEP, 0, 0)
+            scatter.transform = translation.multiply(scatter.transform)
+    # --- [ AKHIR PERUBAHAN 5 ] ---
 
 
     # --- FUNGSI LAMA (Tidak diubah) ---
@@ -695,7 +679,6 @@ pose:
     def _start_cancel_mapping_thread(self, dt):
         threading.Thread(target=self._thread_safe_cancel_mapping, daemon=True).start()
 
-fs
     def _thread_safe_cancel_mapping(self):
         self.manager.cancel_mapping()
         Clock.schedule_once(self._go_to_main_menu)
