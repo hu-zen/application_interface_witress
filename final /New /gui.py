@@ -40,7 +40,7 @@ class NavSelectionScreen(Screen):
             grid.add_widget(Label(text="Tidak ada peta ditemukan.", color=(0,0,0,1)))
             return
         for name in map_names:
-            # Sesuai pembaruan Anda
+            # <-- MODIFIKASI: Sesuai pembaruan Anda
             btn = Button(text=name, size_hint_y=None, height='120dp', font_size='50sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
@@ -56,12 +56,12 @@ class MapImage(TouchRippleBehavior, Image):
     marker = ObjectProperty(None, allownone=True)
 
     def on_touch_down(self, touch):
+        # Logika on_touch_down ini sudah benar dan akan bekerja
+        # di dalam Scatter karena `touch.pos` adalah koordinat global.
         if self.collide_point(*touch.pos):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # <-- KESALAHAN SEBELUMNYA ADA DI SINI
-            # bold:True TELAH DIPERBAIKI MENJADI bold=True
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -91,8 +91,11 @@ class NavigationScreen(Screen):
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
+            
+            # <-- MODIFIKASI 1: Tambahkan marker ke 'scatter_map', BUKAN 'map_container'
             self.ids.scatter_map.add_widget(self.robot_marker)
         
+        # Reset zoom/pan saat masuk layar
         self.ids.scatter_map.scale = 1.0
         self.ids.scatter_map.pos = self.ids.map_container.pos
         
@@ -159,10 +162,15 @@ class NavigationScreen(Screen):
         pixel_y = (pose['y'] - origin_y) / resolution
 
         # 2. Konversi dari piksel ke posisi di dalam widget (termasuk offset)
+        # Perhitungan ini masih menghasilkan KOORDINAT GLOBAL (WINDOW)
         pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
         pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
         
+        
+        # <-- MODIFIKASI 2: Konversi koordinat global ke lokal 'Scatter'
         scatter = self.ids.scatter_map
+        # Ambil koordinat global (pos_in_widget_x/y) dan ubah ke 
+        # koordinat lokal di dalam Scatter.
         local_pos = scatter.to_local(pos_in_widget_x, pos_in_widget_y)
         
         self.robot_marker.center = local_pos
@@ -216,13 +224,6 @@ class MainApp(App):
         Rectangle:
             pos: self.pos
             size: self.size
-            
-# Tombol Kontrol Peta
-<MapControlButton@Button>:
-    font_size: '30sp'
-    size_hint: (1, 1)
-    # Sedikit transparan agar tidak terlalu menutupi peta
-    background_color: 0.2, 0.2, 0.2, 0.8 
 
 # ==================================
 # ATURAN WIDGET CUSTOM
@@ -311,6 +312,7 @@ class MainApp(App):
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
+# <-- MODIFIKASI 3: Tata Letak KV <NavigationScreen>
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -322,69 +324,27 @@ class MainApp(App):
             id: map_container
             size_hint: 1, 1
             
+            # Scatter adalah widget yang menangani zoom/pan
             Scatter:
                 id: scatter_map
                 size_hint: (1, 1)
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
-                do_rotation: False
-                do_scale: True
-                do_translation: True
-                scale_min: 1.0
-                scale_max: 8.0  # Batas zoom maksimum
-                auto_bring_to_front: False
+                do_rotation: False  # Matikan rotasi
+                do_scale: True      # Izinkan zoom (pinch/scroll)
+                do_translation: True  # Izinkan pan (geser)
+                scale_min: 1.0        # Peta tidak bisa lebih kecil dari layar
+                auto_bring_to_front: False # Agar tidak mengganggu marker
 
+                # MapImage sekarang ada DI DALAM Scatter
                 MapImage:
                     id: map_viewer
                     source: ''
                     allow_stretch: True
                     keep_ratio: True
+                    # size_hint (None, None) dan size: self.parent.size
+                    # sangat penting agar Scatter tahu ukuran kontennya.
                     size_hint: (None, None)
                     size: self.parent.size 
-
-            # --- 1. TOMBOL ZOOM ---
-            BoxLayout:
-                orientation: 'vertical'
-                size_hint: (None, None)
-                size: ('60dp', '130dp') # Lebar 60, Tinggi 130
-                pos_hint: {'right': 0.98, 'center_y': 0.5}
-                spacing: 10
-                
-                MapControlButton:
-                    text: "+"
-                    on_press: app.zoom_in()
-                MapControlButton:
-                    text: "-"
-                    on_press: app.zoom_out()
-            
-            # --- 2. TOMBOL PAN (D-PAD) ---
-            GridLayout:
-                cols: 3
-                size_hint: (None, None)
-                size: ('180dp', '180dp')
-                pos_hint: {'left': 0.02, 'bottom': 0.02}
-                
-                # Baris 1
-                Widget()
-                MapControlButton:
-                    text: "^"
-                    on_press: app.pan_map(0, -1) # Atas
-                Widget()
-                
-                # Baris 2
-                MapControlButton:
-                    text: "<"
-                    on_press: app.pan_map(1, 0) # Kiri
-                Widget() # Spasi tengah
-                MapControlButton:
-                    text: ">"
-                    on_press: app.pan_map(-1, 0) # Kanan
-                
-                # Baris 3
-                Widget()
-                MapControlButton:
-                    text: "v"
-                    on_press: app.pan_map(0, 1) # Bawah
-                Widget()
 
         # Bagian tombol-tombol di bawah ini tetap sama
         BoxLayout:
@@ -530,34 +490,6 @@ ScreenManager:
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
 
-    def _get_map_scatter(self):
-        """Helper untuk mendapatkan widget Scatter."""
-        try:
-            return self.root.get_screen('navigation').ids.scatter_map
-        except Exception:
-            return None
-
-    def zoom_in(self):
-        scatter = self._get_map_scatter()
-        if scatter:
-            scatter.scale = min(scatter.scale * 1.2, scatter.scale_max)
-
-    def zoom_out(self):
-        scatter = self._get_map_scatter()
-        if scatter:
-            scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
-
-    def pan_map(self, direction_x, direction_y):
-        """
-        Menggeser Scatter.
-        direction_x/y adalah 1, 0, or -1.
-        """
-        scatter = self._get_map_scatter()
-        if scatter:
-            pan_step = 30 # '30dp'
-            scatter.x += pan_step * direction_x
-            scatter.y += pan_step * direction_y
-
     def scroll_map_list_up(self):
         try:
             scroll = self.root.get_screen('nav_selection').ids.map_scroll
@@ -607,12 +539,16 @@ ScreenManager:
         
         if scale == 0: return
 
+        # Kalkulasi ini menggunakan `touch.pos` (global) dan `offset` dari logika Anda
+        # Pengurangan `image_widget.x` dan `image_widget.y` tetap dipertahankan
+        # sesuai referensi akurat Anda.
         touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
         touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
         
+        # Konversi piksel ke koordinat dunia ROS (meter)
         map_x = (pixel_x * resolution) + origin_x
         map_y = (pixel_y * resolution) + origin_y
         
