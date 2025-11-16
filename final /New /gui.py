@@ -56,14 +56,14 @@ class MapImage(TouchRippleBehavior, Image):
     marker = ObjectProperty(None, allownone=True)
 
     def on_touch_down(self, touch):
-        # Logika on_touch_down ini sudah benar dan akan bekerja
-        # di dalam Scatter karena `touch.pos` adalah koordinat global.
         if self.collide_point(*touch.pos):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Baris ini SUDAH BENAR (bold=True)
+            # <-- MODIFIKASI: KESALAHAN SYNTAX DIPERBAIKI DI SINI
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+            # ^^^ bold:True diubah menjadi bold=True
+
             new_marker.center = touch.pos
             self.add_widget(new_marker)
             self.marker = new_marker
@@ -92,11 +92,8 @@ class NavigationScreen(Screen):
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
-            
-            # Ini sudah benar
             self.ids.scatter_map.add_widget(self.robot_marker)
         
-        # Reset zoom/pan saat masuk layar
         self.ids.scatter_map.scale = 1.0
         self.ids.scatter_map.pos = self.ids.map_container.pos
         
@@ -221,9 +218,11 @@ class MainApp(App):
             pos: self.pos
             size: self.size
             
+# Tombol Kontrol Peta
 <MapControlButton@Button>:
     font_size: '30sp'
     size_hint: (1, 1)
+    # Sedikit transparan agar tidak terlalu menutupi peta
     background_color: 0.2, 0.2, 0.2, 0.8 
 
 # ==================================
@@ -313,7 +312,6 @@ class MainApp(App):
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
-# <-- MODIFIKASI DIMULAI DI SINI
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -359,7 +357,7 @@ class MainApp(App):
                     text: "-"
                     on_press: app.zoom_out()
             
-            # --- 2. TOMBOL PAN (D-PAD) DITAMBAHKAN ---
+            # --- 2. TOMBOL PAN (D-PAD) ---
             GridLayout:
                 cols: 3
                 size_hint: (None, None)
@@ -410,7 +408,6 @@ class MainApp(App):
                 source: 'go_back.png'
                 size_hint_y: 1.1
                 on_press: app.exit_navigation_mode()
-# <-- MODIFIKASI SELESAI
 
 # ==================================
 # SCREEN MANAGER UTAMA
@@ -534,8 +531,6 @@ ScreenManager:
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
 
-    # <-- 3. FUNGSI-FUNGSI BARU DITAMBAHKAN
-    
     def _get_map_scatter(self):
         """Helper untuk mendapatkan widget Scatter."""
         try:
@@ -561,16 +556,8 @@ ScreenManager:
         scatter = self._get_map_scatter()
         if scatter:
             pan_step = 30 # '30dp'
-            # Penjelasan Logika Arah:
-            # - Tombol Kiri (<) -> direction_x = 1 -> scatter.x bergerak ke KANAN (+)
-            # - Tombol Kanan (>) -> direction_x = -1 -> scatter.x bergerak ke KIRI (-)
-            # - Tombol Atas (^) -> direction_y = -1 -> scatter.y bergerak ke BAWAH (-)
-            # - Tombol Bawah (v) -> direction_y = 1 -> scatter.y bergerak ke ATAS (+)
-            # Ini sudah benar, karena kita menggerakkan 'kamera' (Scatter), bukan 'dunia' (peta).
             scatter.x += pan_step * direction_x
             scatter.y += pan_step * direction_y
-
-    # --- FUNGSI LAMA ---
 
     def scroll_map_list_up(self):
         try:
