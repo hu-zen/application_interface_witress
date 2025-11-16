@@ -16,6 +16,7 @@ import yaml
 import math
 import os
 import subprocess
+import threading  # <-- 1. IMPORT THREADING
 
 from manager import RosManager
 
@@ -404,23 +405,26 @@ ScreenManager:
                 font_size: '18sp'
                 color: 0.4, 0.4, 0.4, 1
                 
-            # Layout baru untuk menampung 2 tombol
             BoxLayout:
                 orientation: 'horizontal'
                 spacing: 10
                 size_hint_y: None
-                height: self.minimum_height # Biarkan tinggi mengikuti tombol
+                height: self.minimum_height
                 
                 Button:
                     text: 'Selesai Mapping & Simpan Otomatis'
                     font_size: '22sp'
+                    size_hint_y: None # <-- TAMBAHKAN
+                    height: '80dp'    # <-- TAMBAHKAN (sesuaikan ukurannya)
                     on_press: app.exit_mapping_mode()
                     
                 Button:
                     text: 'Batalkan (Tanpa Simpan)'
                     font_size: '22sp'
-                    on_press: app.cancel_mapping_mode() # <-- PANGGIL FUNGSI BARU
-                    background_color: 0.8, 0.2, 0.2, 1 # Beri warna merah
+                    size_hint_y: None # <-- TAMBAHKAN
+                    height: '80dp'    # <-- TAMBAHKAN (sesuaikan ukurannya)
+                    on_press: app.cancel_mapping_mode()
+                    background_color: 0.8, 0.2, 0.2, 1
     # <-- MODIFIKASI SELESAI
             
     NavSelectionScreen:
@@ -537,22 +541,47 @@ pose:
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
 
+    # --- MODIFIKASI DIMULAI DI SINI (LOGIKA THREADING) ---
+    
     def exit_mapping_mode(self):
+        # 1. Update label (ini aman di main thread)
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
-        Clock.schedule_once(self._finish_exit_mapping, 1)
+        # 2. Jadwalkan thread untuk mulai setelah 0.1 detik (agar label sempat update)
+        Clock.schedule_once(self._start_stop_mapping_thread, 0.1)
 
-    def _finish_exit_mapping(self, dt):
+    def _start_stop_mapping_thread(self, dt):
+        # 3. Mulai thread baru untuk tugas berat (blocking)
+        threading.Thread(target=self._thread_safe_stop_mapping, daemon=True).start()
+
+    def _thread_safe_stop_mapping(self):
+        # 4. (DI BACKGROUND THREAD) Panggil fungsi manager yang mem-block
         self.manager.stop_mapping()
-        self.root.current = 'main_menu'
+        # 5. (DI BACKGROUND THREAD) Setelah selesai, panggil fungsi untuk pindah layar
+        Clock.schedule_once(self._go_to_main_menu)
 
-    # <-- 1. FUNGSI BARU DITAMBAHKAN DI SINI
     def cancel_mapping_mode(self):
+        # 1. Update label
         self.update_status_label('mapping', 'mapping_status_label', 'Membatalkan...\\nTidak menyimpan peta.')
-        Clock.schedule_once(self._finish_cancel_mapping, 1)
+        # 2. Jadwalkan thread
+        Clock.schedule_once(self._start_cancel_mapping_thread, 0.1)
 
-    def _finish_cancel_mapping(self, dt):
-        self.manager.cancel_mapping() # Memanggil fungsi baru di manager
+    def _start_cancel_mapping_thread(self, dt):
+        # 3. Mulai thread baru
+        threading.Thread(target=self._thread_safe_cancel_mapping, daemon=True).start()
+
+    def _thread_safe_cancel_mapping(self):
+        # 4. (DI BACKGROUND THREAD) Panggil fungsi manager yang mem-block
+        self.manager.cancel_mapping()
+        # 5. (DI BACKGROUND THREAD) Panggil fungsi pindah layar
+        Clock.schedule_once(self._go_to_main_menu)
+        
+    def _go_to_main_menu(self, *args):
+        # 6. (DI MAIN THREAD) Aman untuk pindah layar
         self.root.current = 'main_menu'
+
+    # Kita tidak lagi memerlukan _finish_exit_mapping dan _finish_cancel_mapping
+
+    # --- MODIFIKASI SELESAI ---
 
     def start_navigation_with_map(self, map_name, *args):
         self.manager.start_navigation(map_name)
