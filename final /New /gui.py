@@ -10,9 +10,9 @@ from kivy.clock import mainthread, Clock
 from functools import partial
 from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior
-# PASTIKAN ListProperty DITAMBAHKAN DI SINI
-from kivy.properties import ObjectProperty, NumericProperty, ListProperty 
+from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
+from kivy.uix.widget import Widget # <-- 1. IMPORT Widget UNTUK D-PAD SPACER
 import yaml
 import math
 import os
@@ -49,80 +49,30 @@ class NavSelectionScreen(Screen):
 class ImageButton(ButtonBehavior, Image):
     pass
 
-# ==============================================================
-# === KELAS MAPIMAGE YANG DIPERBARUI (TAP vs DRAG) ===
-# ==============================================================
+# KELAS MAPIMAGE INI KEMBALI SEPERTI ASLI (TIDAK ADA PERUBAHAN)
 class MapImage(TouchRippleBehavior, Image):
     """
-    Kelas ini sekarang membedakan antara "TAP" (untuk set goal)
-    dan "DRAG" (untuk pan/geser peta).
+    Kelas ini menggunakan logika on_touch_down dari referensi Anda.
+    Tidak ada yang diubah sama sekali.
     """
     marker = ObjectProperty(None, allownone=True)
-    _touch_down_pos = ListProperty(None) # Menyimpan posisi awal sentuhan
 
     def on_touch_down(self, touch):
-        # Cek apakah sentuhan ada di dalam gambar
-        if not self.collide_point(*touch.pos):
-            self._touch_down_pos = None
-            return False # Abaikan sentuhan di luar
+        # Logika on_touch_down ini sudah benar dan akan bekerja
+        # di dalam Scatter karena `touch.pos` adalah koordinat global.
+        if self.collide_point(*touch.pos):
+            if self.marker and self.marker.parent:
+                self.remove_widget(self.marker)
 
-        # Simpan posisi awal sentuhan
-        self._touch_down_pos = touch.pos
-        
-        # Ambil (grab) sentuhan ini agar on_touch_up pasti terpanggil
-        touch.grab(self)
-        
-        # Biarkan parent (Scatter) juga memproses sentuhan ini
-        # Ini PENTING agar zoom/pan tetap bekerja
-        return super().on_touch_down(touch)
+            # Baris ini SUDAH BENAR di kode Anda (bold=True)
+            new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
+            new_marker.center = touch.pos
+            self.add_widget(new_marker)
+            self.marker = new_marker
 
-    def on_touch_up(self, touch):
-        # Cek apakah ini sentuhan yang kita 'grab'
-        if touch.grab_current is self:
-            # 1. Lepaskan 'grab'
-            touch.ungrab(self)
-
-            # 2. Cek apakah sentuhan ini valid (dimulai di dalam widget)
-            if self._touch_down_pos is None:
-                return super().on_touch_up(touch) # Abaikan
-
-            # 3. Hitung jarak gerak
-            from math import sqrt
-            dist = sqrt((touch.pos[0] - self._touch_down_pos[0])**2 + (touch.pos[1] - self._touch_down_pos[1])**2)
-            
-            # 4. Reset _touch_down_pos
-            self._touch_down_pos = None
-
-            # 5. Tentukan apakah ini "TAP"
-            # Jika jarak gerak kurang dari 10 piksel, kita anggap ini TAP
-            if dist < 10:
-                # --- INI ADALAH LOGIKA LAMA ANDA ---
-                # Pindahkan logika dari on_touch_down ke sini
-                
-                if self.marker and self.marker.parent:
-                    self.remove_widget(self.marker)
-
-                new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
-                
-                # Gunakan touch.pos (posisi 'up') untuk marker
-                new_marker.center = touch.pos 
-                self.add_widget(new_marker)
-                self.marker = new_marker
-
-                App.get_running_app().calculate_ros_goal(touch, self)
-                # --- AKHIR LOGIKA LAMA ---
-
-            # Jika dist >= 10, itu adalah "DRAG" (pan)
-            # Kita tidak melakukan apa-apa, dan Scatter akan menanganinya.
-            
-            # 6. Kirim event ke parent
-            return super().on_touch_up(touch)
-        
-        # Jika bukan sentuhan yang kita grab, biarkan parent yg proses
-        return super().on_touch_up(touch)
-# ==============================================================
-# === AKHIR DARI PERUBAHAN ===
-# ==============================================================
+            App.get_running_app().calculate_ros_goal(touch, self)
+            return super().on_touch_down(touch)
+        return False
 
 class RobotMarker(Image):
     angle = NumericProperty(0)
@@ -228,6 +178,10 @@ class NavigationScreen(Screen):
 # KELAS APLIKASI UTAMA
 # ==================================
 class MainApp(App):
+    
+    # <-- 2. TAMBAHKAN PROPERTI INI UNTUK MENGATUR JARAK GESER
+    PAN_STEP = 50  # Jumlah piksel per geseran
+
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         Window.maximize()
@@ -366,7 +320,7 @@ class MainApp(App):
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
-# <-- 2. MODIFIKASI KV <NavigationScreen>
+# <-- 3. MODIFIKASI KV <NavigationScreen> (PENAMBAHAN D-PAD)
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -397,7 +351,7 @@ class MainApp(App):
                     size_hint: (None, None)
                     size: self.parent.size 
 
-            # --- TOMBOL ZOOM ---
+            # --- TOMBOL ZOOM (Tetap ada di kanan) ---
             BoxLayout:
                 orientation: 'vertical'
                 size_hint: (None, None)
@@ -412,7 +366,37 @@ class MainApp(App):
                     text: "-"
                     on_press: app.zoom_out()
             
-            # (Tombol D-Pad Pan tidak ditambahkan)
+            # --- [KODE BARU] TOMBOL PAN D-PAD (Ditambahkan di kiri) ---
+            GridLayout:
+                cols: 3
+                size_hint: (None, None)
+                size: ('180dp', '180dp') # 60dp per sel
+                pos_hint: {'left': 0.02, 'center_y': 0.5}
+                spacing: 5 # Spasi antar tombol
+
+                # Baris 1: Tombol ATAS
+                Widget: # Spacer
+                MapControlButton:
+                    text: "▲" # Panah Atas
+                    on_press: app.pan_map_up()
+                Widget: # Spacer
+
+                # Baris 2: Tombol KIRI & KANAN
+                MapControlButton:
+                    text: "◄" # Panah Kiri
+                    on_press: app.pan_map_left()
+                Widget: # Spacer (Tengah)
+                MapControlButton:
+                    text: "►" # Panah Kanan
+                    on_press: app.pan_map_right()
+
+                # Baris 3: Tombol BAWAH
+                Widget: # Spacer
+                MapControlButton:
+                    text: "▼" # Panah Bawah
+                    on_press: app.pan_map_down()
+                Widget: # Spacer
+            # --- [AKHIR KODE BARU] ---
             
 
         # Bagian tombol-tombol di bawah ini tetap sama
@@ -558,8 +542,6 @@ ScreenManager:
     # ==================================
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
-
-    # <-- 3. FUNGSI ZOOM DITAMBAHKAN
     
     def _get_map_scatter(self):
         """Helper untuk mendapatkan widget Scatter."""
@@ -568,6 +550,7 @@ ScreenManager:
         except Exception:
             return None
 
+    # --- FUNGSI ZOOM (Sudah ada) ---
     def zoom_in(self):
         scatter = self._get_map_scatter()
         if scatter:
@@ -578,7 +561,32 @@ ScreenManager:
         if scatter:
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
             
-    # (Fungsi pan_map tidak ditambahkan)
+    # --- [KODE BARU] FUNGSI-FUNGSI PAN ---
+    def pan_map_up(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke atas berarti mengurangi Y
+            scatter.y -= self.PAN_STEP
+
+    def pan_map_down(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke bawah berarti menambah Y
+            scatter.y += self.PAN_STEP
+
+    def pan_map_left(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke kiri berarti menambah X
+            scatter.x += self.PAN_STEP
+
+    def pan_map_right(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke kanan berarti mengurangi X
+            scatter.x -= self.PAN_STEP
+    # --- [AKHIR KODE BARU] ---
+
 
     # --- FUNGSI LAMA ---
 
