@@ -16,7 +16,7 @@ import yaml
 import math
 import os
 import subprocess
-import threading  # <-- 1. IMPORT THREADING
+import threading
 
 from manager import RosManager
 
@@ -40,7 +40,8 @@ class NavSelectionScreen(Screen):
             grid.add_widget(Label(text="Tidak ada peta ditemukan.", color=(0,0,0,1)))
             return
         for name in map_names:
-            btn = Button(text=name, size_hint_y=None, height='48dp', font_size='20sp')
+            # <-- 1. TOMBOL DIPERBESAR DI SINI
+            btn = Button(text=name, size_hint_y=None, height='70dp', font_size='22sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
@@ -252,6 +253,7 @@ class MainApp(App):
             on_press:
                 app.root.current = 'main_menu'
 
+# <-- MODIFIKASI DIMULAI DI SINI
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -264,18 +266,40 @@ class MainApp(App):
             allow_stretch: True
             keep_ratio: True
             
-        ScrollView:
-            GridLayout:
-                id: nav_map_grid
-                cols: 1
-                size_hint_y: None
-                height: self.minimum_height
+        # Layout horizontal untuk menampung ScrollView dan Tombol Scroll
+        BoxLayout:
+            orientation: 'horizontal'
+            spacing: 10
+            # size_hint_y: 0.6 (biarkan default agar mengisi sisa ruang)
+            
+            ScrollView:
+                id: map_scroll # <-- ID DITAMBAHKAN
+                GridLayout:
+                    id: nav_map_grid
+                    cols: 1
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: 10
+            
+            # Layout vertikal untuk tombol scroll
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint_x: None
+                width: '90dp' # Lebar tetap untuk tombol scroll
                 spacing: 10
-        
+                
+                ImageButton:
+                    source: 'scroll_up.png' # <-- TOMBOL BARU
+                    on_press: app.scroll_map_list_up()
+                ImageButton:
+                    source: 'scroll_down.png' # <-- TOMBOL BARU
+                    on_press: app.scroll_map_list_down()
+
         ImageButton:
             source: 'go_back.png'
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
+# <-- MODIFIKASI SELESAI
             
 <NavigationScreen>:
     name: 'navigation'
@@ -388,7 +412,6 @@ ScreenManager:
                 size_hint_y: 0.2
                 on_press: app.exit_controller_mode()
                 
-    # <-- MODIFIKASI DIMULAI DI SINI
     Screen:
         name: 'mapping'
         BoxLayout:
@@ -414,18 +437,17 @@ ScreenManager:
                 Button:
                     text: 'Selesai Mapping & Simpan Otomatis'
                     font_size: '22sp'
-                    size_hint_y: None # <-- TAMBAHKAN
-                    height: '80dp'    # <-- TAMBAHKAN (sesuaikan ukurannya)
+                    size_hint_y: None 
+                    height: '80dp'    
                     on_press: app.exit_mapping_mode()
                     
                 Button:
                     text: 'Batalkan (Tanpa Simpan)'
                     font_size: '22sp'
-                    size_hint_y: None # <-- TAMBAHKAN
-                    height: '80dp'    # <-- TAMBAHKAN (sesuaikan ukurannya)
+                    size_hint_y: None 
+                    height: '80dp'    
                     on_press: app.cancel_mapping_mode()
-                    background_color: 0.8, 0.2, 0.2, 1
-    # <-- MODIFIKASI SELESAI
+                    background_color: 0.8, 0.2, 0.2, 1 
             
     NavSelectionScreen:
         name: 'nav_selection'
@@ -435,8 +457,29 @@ ScreenManager:
         return Builder.load_string(kv_design)
 
     # ==================================
-    # FUNGSI-FUNGSI LOGIKA (TIDAK BERUBAH)
+    # FUNGSI-FUNGSI LOGIKA
     # ==================================
+
+    # <-- 2. FUNGSI BARU DITAMBAHKAN DI SINI
+    def scroll_map_list_up(self):
+        try:
+            scroll = self.root.get_screen('nav_selection').ids.map_scroll
+            # Menambah scroll_y (1.0 adalah paling atas)
+            new_scroll = min(1.0, scroll.scroll_y + 0.1) # 0.1 = 10%
+            scroll.scroll_y = new_scroll
+        except Exception as e:
+            print(f"Error scrolling up: {e}")
+
+    def scroll_map_list_down(self):
+        try:
+            scroll = self.root.get_screen('nav_selection').ids.map_scroll
+            # Mengurangi scroll_y (0.0 adalah paling bawah)
+            new_scroll = max(0.0, scroll.scroll_y - 0.1) # 0.1 = 10%
+            scroll.scroll_y = new_scroll
+        except Exception as e:
+            print(f"Error scrolling down: {e}")
+    
+    # --- FUNGSI LAMA ---
 
     def calculate_ros_goal(self, touch, image_widget):
         """
@@ -541,47 +584,33 @@ pose:
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
 
-    # --- MODIFIKASI DIMULAI DI SINI (LOGIKA THREADING) ---
+    # --- Logika Threading (Sudah Benar) ---
     
     def exit_mapping_mode(self):
-        # 1. Update label (ini aman di main thread)
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
-        # 2. Jadwalkan thread untuk mulai setelah 0.1 detik (agar label sempat update)
         Clock.schedule_once(self._start_stop_mapping_thread, 0.1)
 
     def _start_stop_mapping_thread(self, dt):
-        # 3. Mulai thread baru untuk tugas berat (blocking)
         threading.Thread(target=self._thread_safe_stop_mapping, daemon=True).start()
 
     def _thread_safe_stop_mapping(self):
-        # 4. (DI BACKGROUND THREAD) Panggil fungsi manager yang mem-block
         self.manager.stop_mapping()
-        # 5. (DI BACKGROUND THREAD) Setelah selesai, panggil fungsi untuk pindah layar
         Clock.schedule_once(self._go_to_main_menu)
 
     def cancel_mapping_mode(self):
-        # 1. Update label
         self.update_status_label('mapping', 'mapping_status_label', 'Membatalkan...\\nTidak menyimpan peta.')
-        # 2. Jadwalkan thread
         Clock.schedule_once(self._start_cancel_mapping_thread, 0.1)
 
     def _start_cancel_mapping_thread(self, dt):
-        # 3. Mulai thread baru
         threading.Thread(target=self._thread_safe_cancel_mapping, daemon=True).start()
 
     def _thread_safe_cancel_mapping(self):
-        # 4. (DI BACKGROUND THREAD) Panggil fungsi manager yang mem-block
         self.manager.cancel_mapping()
-        # 5. (DI BACKGROUND THREAD) Panggil fungsi pindah layar
         Clock.schedule_once(self._go_to_main_menu)
         
+    @mainthread
     def _go_to_main_menu(self, *args):
-        # 6. (DI MAIN THREAD) Aman untuk pindah layar
         self.root.current = 'main_menu'
-
-    # Kita tidak lagi memerlukan _finish_exit_mapping dan _finish_cancel_mapping
-
-    # --- MODIFIKASI SELESAI ---
 
     def start_navigation_with_map(self, map_name, *args):
         self.manager.start_navigation(map_name)
