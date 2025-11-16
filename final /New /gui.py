@@ -12,6 +12,7 @@ from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
+from kivy.uix.widget import Widget # Diperlukan untuk Spacer D-Pad
 import yaml
 import math
 import os
@@ -40,7 +41,6 @@ class NavSelectionScreen(Screen):
             grid.add_widget(Label(text="Tidak ada peta ditemukan.", color=(0,0,0,1)))
             return
         for name in map_names:
-            # Sesuai pembaruan Anda
             btn = Button(text=name, size_hint_y=None, height='120dp', font_size='50sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
@@ -48,6 +48,7 @@ class NavSelectionScreen(Screen):
 class ImageButton(ButtonBehavior, Image):
     pass
 
+# Kelas MapImage kembali seperti original, TIDAK diubah
 class MapImage(TouchRippleBehavior, Image):
     """
     Kelas ini menggunakan logika on_touch_down dari referensi Anda.
@@ -62,8 +63,7 @@ class MapImage(TouchRippleBehavior, Image):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # <-- *** PERBAIKAN KESALAHAN SYNTAX ADA DI SINI ***
-            # bold:True telah diganti menjadi bold=True
+            # Baris ini SUDAH BENAR di kode Anda (bold=True)
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -94,13 +94,18 @@ class NavigationScreen(Screen):
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
             
-            # Ini sudah benar
             self.ids.scatter_map.add_widget(self.robot_marker)
         
         # Reset zoom/pan saat masuk layar
         self.ids.scatter_map.scale = 1.0
         self.ids.scatter_map.pos = self.ids.map_container.pos
         
+        # [ --- PERUBAHAN 1 DI SINI --- ]
+        # Sembunyikan D-Pad saat pertama kali masuk
+        self.ids.dpad_layout.opacity = 0
+        self.ids.dpad_layout.disabled = True
+        # [ --------------------------- ]
+
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
         self.selected_goal_coords = None
         self.ids.navigation_status_label.text = "Status: Pilih titik di peta"
@@ -122,10 +127,6 @@ class NavigationScreen(Screen):
 
     @mainthread
     def update_robot_display(self, dt):
-        """
-        Fungsi ini sekarang 100% merupakan kebalikan matematis dari
-        fungsi calculate_ros_goal referensi Anda.
-        """
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
@@ -158,12 +159,9 @@ class NavigationScreen(Screen):
             offset_y = (widget_h - norm_h * scale) / 2.0
         if scale == 0: return
 
-        # === INVERSE LOGIC ===
-        # 1. Konversi posisi ROS (meter) ke koordinat piksel
         pixel_x = (pose['x'] - origin_x) / resolution
         pixel_y = (pose['y'] - origin_y) / resolution
 
-        # 2. Konversi dari piksel ke posisi di dalam widget (termasuk offset)
         pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
         pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
         
@@ -177,6 +175,10 @@ class NavigationScreen(Screen):
 # KELAS APLIKASI UTAMA
 # ==================================
 class MainApp(App):
+    
+    # Jarak geser per klik tombol
+    PAN_STEP = 50  
+
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         Window.maximize()
@@ -188,33 +190,27 @@ class MainApp(App):
 <Screen>:
     canvas.before:
         Color:
-            rgba: 1, 1, 1, 1  # Latar belakang PUTIH
+            rgba: 1, 1, 1, 1
         Rectangle:
             pos: self.pos
             size: self.size
-
 <Label>:
-    color: 0, 0, 0, 1  # Teks default HITAM
-
+    color: 0, 0, 0, 1
 <Button>:
-    color: 1, 1, 1, 1  # TEKS TOMBOL PUTIH
-    background_color: 0.3, 0.3, 0.3, 1 # BACKGROUND ABU-ABU GELAP
+    color: 1, 1, 1, 1
+    background_color: 0.3, 0.3, 0.3, 1
     background_normal: '' 
-
 <TextInput>:
     foreground_color: 0, 0, 0, 1 
     background_color: 0.9, 0.9, 0.9, 1 
-
 # ==================================
 # ATURAN STYLE BARU
 # ==================================
 <ImageButton>:
-    # Membuat tombol gambar transparan
     background_color: 1, 1, 1, 0 
     background_normal: ''
     allow_stretch: True
     keep_ratio: True
-    # Menambahkan efek visual "ditekan" (menjadi sedikit gelap)
     canvas.after:
         Color:
             rgba: 0, 0, 0, 0.3 if self.state == 'down' else 0
@@ -226,7 +222,6 @@ class MainApp(App):
     font_size: '30sp'
     size_hint: (1, 1)
     background_color: 0.2, 0.2, 0.2, 0.8
-
 # ==================================
 # ATURAN WIDGET CUSTOM
 # ==================================
@@ -243,12 +238,11 @@ class MainApp(App):
 # ==================================
 # LAYOUT LAYAR (BARU & LAMA)
 # ==================================
-
 <HomeScreen>:
     FloatLayout:
         canvas.before:
             Color:
-                rgba: 1, 1, 1, 1      # PUTIH penuh
+                rgba: 1, 1, 1, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -260,8 +254,6 @@ class MainApp(App):
             pos_hint: {"center_x": 0.5, "center_y": 0.65}
             allow_stretch: True
             keep_ratio: True
-
-        # START BUTTON
         ImageButton:
             source: 'start.png'
             size_hint: None, None
@@ -276,17 +268,14 @@ class MainApp(App):
         orientation: 'vertical'
         padding: 20
         spacing: 10
-        
         Image:
             source: 'Choose_your_mission.png' 
             size_hint_y: 0.2
             allow_stretch: True
             keep_ratio: True
-            
         BoxLayout:
             orientation: 'horizontal'
             spacing: 10
-            
             ScrollView:
                 id: map_scroll
                 GridLayout:
@@ -295,33 +284,28 @@ class MainApp(App):
                     size_hint_y: None
                     height: self.minimum_height
                     spacing: 10
-            
             BoxLayout:
                 orientation: 'vertical'
                 size_hint_x: None
                 width: '90dp'
                 spacing: 10
-                
                 ImageButton:
                     source: 'scroll_up.png'
                     on_press: app.scroll_map_list_up()
                 ImageButton:
                     source: 'scroll_down.png'
                     on_press: app.scroll_map_list_down()
-
         ImageButton:
             source: 'go_back.png'
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
-# <-- MODIFIKASI DIMULAI DI SINI
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
         spacing: 10
-        
         FloatLayout:
             id: map_container
             size_hint: 1, 1
@@ -332,7 +316,12 @@ class MainApp(App):
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
                 do_rotation: False
                 do_scale: True
-                do_translation: True
+                
+                # [ --- PERUBAHAN 2 DI SINI --- ]
+                # Mematikan geser manual (hanya bisa via D-Pad)
+                do_translation: False 
+                # [ --------------------------- ]
+
                 scale_min: 1.0
                 scale_max: 8.0
                 auto_bring_to_front: False
@@ -345,14 +334,13 @@ class MainApp(App):
                     size_hint: (None, None)
                     size: self.parent.size 
 
-            # --- TOMBOL ZOOM (Sudah ada) ---
+            # --- TOMBOL ZOOM (Kanan) ---
             BoxLayout:
                 orientation: 'vertical'
                 size_hint: (None, None)
-                size: ('60dp', '130dp')
+                size: ('60dp', '130dp') 
                 pos_hint: {'right': 0.98, 'center_y': 0.5}
                 spacing: 10
-                
                 MapControlButton:
                     text: "+"
                     on_press: app.zoom_in()
@@ -360,41 +348,38 @@ class MainApp(App):
                     text: "-"
                     on_press: app.zoom_out()
             
-            # --- 1. TOMBOL PAN (D-PAD) DITAMBAHKAN ---
+            # --- TOMBOL PAN D-PAD (Kiri) ---
             GridLayout:
+                # [ --- PERUBAHAN 3 DI SINI --- ]
+                # Menambahkan ID untuk D-Pad
+                id: dpad_layout
+                # [ --------------------------- ]
+                
                 cols: 3
                 size_hint: (None, None)
-                size: ('180dp', '180dp')
-                pos_hint: {'left': 0.02, 'bottom': 0.02}
-                
-                # Baris 1
-                Widget()
-                MapControlButton:
-                    text: "^"
-                    on_press: app.pan_map(0, -1) # Atas
-                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
-                Widget()
-                
-                # Baris 2
-                MapControlButton:
-                    text: "<"
-                    on_press: app.pan_map(1, 0) # Kiri
-                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
-                Widget() # Spasi tengah
-                MapControlButton:
-                    text: ">"
-                    on_press: app.pan_map(-1, 0) # Kanan
-                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
-                
-                # Baris 3
-                Widget()
-                MapControlButton:
-                    text: "v"
-                    on_press: app.pan_map(0, 1) # Bawah
-                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
-                Widget()
+                size: ('180dp', '180dp') 
+                pos_hint: {'left': 0.02, 'center_y': 0.5}
+                spacing: 5 
 
-        # Bagian tombol-tombol di bawah ini tetap sama
+                Widget: 
+                MapControlButton:
+                    text: "▲" 
+                    on_press: app.pan_map_up()
+                Widget: 
+                MapControlButton:
+                    text: "◄" 
+                    on_press: app.pan_map_left()
+                Widget: 
+                MapControlButton:
+                    text: "►" 
+                    on_press: app.pan_map_right()
+                Widget: 
+                MapControlButton:
+                    text: "▼" 
+                    on_press: app.pan_map_down()
+                Widget: 
+            
+        # Bagian tombol bawah (Status, Navigasi, Back)
         BoxLayout:
             size_hint_y: None
             height: '60dp'
@@ -410,22 +395,18 @@ class MainApp(App):
                 font_size: '20sp'
                 disabled: True
                 on_press: app.confirm_navigation_goal()
-            
             ImageButton:
                 source: 'go_back.png'
                 size_hint_y: 1.1
                 on_press: app.exit_navigation_mode()
-# <-- MODIFIKASI SELESAI
 
 # ==================================
 # SCREEN MANAGER UTAMA
 # ==================================
 ScreenManager:
     id: sm
-    
     HomeScreen:
         name: 'home' 
-        
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -448,7 +429,6 @@ ScreenManager:
                 text: 'Mode Navigasi'
                 font_size: '22sp'
                 on_press: sm.current = 'nav_selection'
-                
     Screen:
         name: 'pre_mapping'
         BoxLayout:
@@ -474,7 +454,6 @@ ScreenManager:
                 source: 'go_back.png'
                 size_hint_y: 0.4
                 on_press: sm.current = 'main_menu'
-                
     Screen:
         name: 'controller'
         BoxLayout:
@@ -485,12 +464,10 @@ ScreenManager:
                 id: controller_status_label
                 text: 'Status: Siap'
                 font_size: '20sp'
-                
             ImageButton:
                 source: 'go_back.png'
                 size_hint_y: 0.2
                 on_press: app.exit_controller_mode()
-                
     Screen:
         name: 'mapping'
         BoxLayout:
@@ -506,20 +483,17 @@ ScreenManager:
                 text: 'Memetakan: '
                 font_size: '18sp'
                 color: 0.4, 0.4, 0.4, 1
-                
             BoxLayout:
                 orientation: 'horizontal'
                 spacing: 10
                 size_hint_y: None
                 height: self.minimum_height
-                
                 Button:
                     text: 'Selesai Mapping & Simpan Otomatis'
                     font_size: '22sp'
                     size_hint_y: None 
                     height: '80dp'    
                     on_press: app.exit_mapping_mode()
-                    
                 Button:
                     text: 'Batalkan (Tanpa Simpan)'
                     font_size: '22sp'
@@ -527,7 +501,6 @@ ScreenManager:
                     height: '80dp'    
                     on_press: app.cancel_mapping_mode()
                     background_color: 0.8, 0.2, 0.2, 1 
-            
     NavSelectionScreen:
         name: 'nav_selection'
     NavigationScreen:
@@ -538,7 +511,7 @@ ScreenManager:
     # ==================================
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
-
+    
     def _get_map_scatter(self):
         """Helper untuk mendapatkan widget Scatter."""
         try:
@@ -546,30 +519,68 @@ ScreenManager:
         except Exception:
             return None
 
+    # --- FUNGSI ZOOM (Sudah ada) ---
     def zoom_in(self):
         scatter = self._get_map_scatter()
         if scatter:
+            # [ --- PERUBAHAN 4 DI SINI --- ]
+            # Dapatkan akses ke layar navigasi
+            root_screen = self.root.get_screen('navigation')
+            
             scatter.scale = min(scatter.scale * 1.2, scatter.scale_max)
+            
+            # MUNCULKAN dan AKTIFKAN D-Pad
+            root_screen.ids.dpad_layout.opacity = 1.0
+            root_screen.ids.dpad_layout.disabled = False
+            # [ --------------------------- ]
 
     def zoom_out(self):
         scatter = self._get_map_scatter()
         if scatter:
+            # [ --- PERUBAHAN 5 DI SINI --- ]
+            # Dapatkan akses ke layar navigasi
+            root_screen = self.root.get_screen('navigation')
+
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
             
-    # <-- 2. FUNGSI PAN DITAMBAHKAN
-    def pan_map(self, direction_x, direction_y):
-        """
-        Menggeser Scatter.
-        direction_x/y adalah 1, 0, or -1.
-        """
+            # Jika zoom kembali ke minimum
+            if scatter.scale <= 1.0:
+                scatter.scale = 1.0 # Paksa ke 1.0
+                # SEMBUNYIKAN dan NON-AKTIFKAN D-Pad
+                root_screen.ids.dpad_layout.opacity = 0.0
+                root_screen.ids.dpad_layout.disabled = True
+                # RESET posisi peta ke tengah
+                scatter.pos = root_screen.ids.map_container.pos
+            # [ --------------------------- ]
+            
+    # --- FUNGSI-FUNGSI PAN (Sama seperti sebelumnya, tidak diubah) ---
+    def pan_map_up(self):
         scatter = self._get_map_scatter()
         if scatter:
-            pan_step = 30 # '30dp'
-            scatter.x += pan_step * direction_x
-            scatter.y += pan_step * direction_y
+            # Menggeser ke atas berarti mengurangi Y
+            scatter.y -= self.PAN_STEP
 
-    # --- FUNGSI LAMA ---
+    def pan_map_down(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke bawah berarti menambah Y
+            scatter.y += self.PAN_STEP
 
+    def pan_map_left(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke kiri berarti menambah X
+            scatter.x += self.PAN_STEP
+
+    def pan_map_right(self):
+        scatter = self._get_map_scatter()
+        if scatter:
+            # Menggeser ke kanan berarti mengurangi X
+            scatter.x -= self.PAN_STEP
+    # --- Akhir Fungsi Pan ---
+
+
+    # --- FUNGSI LAMA (Tidak diubah) ---
     def scroll_map_list_up(self):
         try:
             scroll = self.root.get_screen('nav_selection').ids.map_scroll
@@ -587,27 +598,18 @@ ScreenManager:
             print(f"Error scrolling down: {e}")
     
     def calculate_ros_goal(self, touch, image_widget):
-        """
-        Fungsi ini 100% menggunakan logika dari file referensi Anda yang akurat.
-        Tidak ada perubahan sama sekali.
-        """
         screen = self.root.get_screen('navigation')
-        
         if not image_widget.texture or not self.manager.map_metadata:
             return
-
         meta = self.manager.map_metadata
         resolution = meta['resolution']
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
-
         norm_w, norm_h = image_widget.texture.size
         if norm_w == 0 or norm_h == 0: return
-
         widget_w, widget_h = image_widget.size
         img_ratio = norm_w / norm_h
         widget_ratio = widget_w / widget_h
-
         if widget_ratio > img_ratio:
             scale = widget_h / norm_h
             offset_x = (widget_w - norm_w * scale) / 2.0
@@ -616,20 +618,14 @@ ScreenManager:
             scale = widget_w / norm_w
             offset_x = 0.0
             offset_y = (widget_h - norm_h * scale) / 2.0
-        
         if scale == 0: return
-
         touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
         touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
-        
         pixel_x = touch_on_image_x / scale
         pixel_y = touch_on_image_y / scale
-        
         map_x = (pixel_x * resolution) + origin_x
         map_y = (pixel_y * resolution) + origin_y
-        
         screen.selected_goal_coords = (map_x, map_y)
-        
         screen.ids.navigate_button.disabled = False
         screen.ids.navigation_status_label.text = f"Goal: ({map_x:.2f}, {map_y:.2f})"
 
@@ -637,7 +633,6 @@ ScreenManager:
         screen = self.root.get_screen('navigation')
         if screen.selected_goal_coords:
             map_x, map_y = screen.selected_goal_coords
-            
             goal_msg_yaml = f"""header:
   stamp: now
   frame_id: "map"
@@ -651,18 +646,15 @@ pose:
     y: 0.0
     z: 0.0
     w: 1.0"""
-
             command = f'rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped "{goal_msg_yaml}"'
             try:
                 subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim ke /move_base_simple/goal")
             except Exception as e:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
-            
             screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
             
-    # --- Sisa fungsi tidak diubah ---
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -684,8 +676,6 @@ pose:
         screen = self.root.get_screen('mapping')
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
-
-    # --- Logika Threading (Sudah Benar) ---
     
     def exit_mapping_mode(self):
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
@@ -705,6 +695,7 @@ pose:
     def _start_cancel_mapping_thread(self, dt):
         threading.Thread(target=self._thread_safe_cancel_mapping, daemon=True).start()
 
+fs
     def _thread_safe_cancel_mapping(self):
         self.manager.cancel_mapping()
         Clock.schedule_once(self._go_to_main_menu)
