@@ -13,11 +13,7 @@ from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
 from kivy.uix.widget import Widget 
-
-# [ --- PERUBAHAN 1 DI SINI --- ]
-# Kita perlu 'Matrix' untuk menggeser (pan) Scatter dengan benar
-from kivy.graphics.transformation import Matrix
-# [ --------------------------- ]
+# Import Matrix sudah dihapus, karena tidak diperlukan lagi
 
 import yaml
 import math
@@ -94,11 +90,12 @@ class NavigationScreen(Screen):
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
             self.ids.scatter_map.add_widget(self.robot_marker)
         
-        # [ --- PERUBAHAN 2 DI SINI --- ]
-        # Reset zoom DAN transform (pan) saat masuk layar
+        # [ --- PERUBAHAN 1 DI SINI --- ]
+        # Reset zoom DAN pos (bukan transform) saat masuk layar
+        # Ini adalah kode asli Anda yang sudah benar.
         scatter = self.ids.scatter_map
         scatter.scale = 1.0
-        scatter.transform = Matrix() # Reset pan/geser ke posisi awal
+        scatter.pos = self.ids.map_container.pos 
         # [ --------------------------- ]
         
         # Sembunyikan D-Pad saat pertama kali masuk
@@ -129,11 +126,9 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
-        
         if pose is None or not app.manager.map_metadata or not map_viewer.texture:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
-            
         self.robot_marker.opacity = 1
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
@@ -167,7 +162,6 @@ class NavigationScreen(Screen):
 # ==================================
 class MainApp(App):
     
-    # Jarak geser per klik tombol
     PAN_STEP = 50  
 
     def build(self):
@@ -304,10 +298,15 @@ class MainApp(App):
             Scatter:
                 id: scatter_map
                 size_hint: (1, 1)
-                pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+                
+                # [ --- PERUBAHAN 2 DI SINI --- ]
+                # GARIS pos_hint DIHAPUS DARI SINI
+                # pos_hint: {'center_x': 0.5, 'center_y': 0.5} <--- DIHAPUS
+                # [ --------------------------- ]
+                
                 do_rotation: False
                 do_scale: True
-                do_translation: False # Geser manual (touch) DIMATIKAN
+                do_translation: False 
                 scale_min: 1.0
                 scale_max: 8.0
                 auto_bring_to_front: False
@@ -343,25 +342,23 @@ class MainApp(App):
                 pos_hint: {'left': 0.02, 'center_y': 0.5}
                 spacing: 5 
 
-                # [ --- PERUBAHAN 3 DI SINI (Teks Tombol) --- ]
                 Widget: 
                 MapControlButton:
-                    text: "^" # Panah Atas
+                    text: "^" # Atas
                     on_press: app.pan_map_up()
                 Widget: 
                 MapControlButton:
-                    text: "<" # Panah Kiri
+                    text: "<" # Kiri
                     on_press: app.pan_map_left()
                 Widget: 
                 MapControlButton:
-                    text: ">" # Panah Kanan
+                    text: ">" # Kanan
                     on_press: app.pan_map_right()
                 Widget: 
                 MapControlButton:
-                    text: "v" # Panah Bawah
+                    text: "v" # Bawah
                     on_press: app.pan_map_down()
                 Widget:
-                # [ --------------------------------------- ]
 
         # Bagian tombol bawah (Status, Navigasi, Back)
         BoxLayout:
@@ -509,8 +506,6 @@ ScreenManager:
         if scatter:
             root_screen = self.root.get_screen('navigation')
             scatter.scale = min(scatter.scale * 1.2, scatter.scale_max)
-            
-            # MUNCULKAN dan AKTIFKAN D-Pad
             root_screen.ids.dpad_layout.opacity = 1.0
             root_screen.ids.dpad_layout.disabled = False
 
@@ -520,48 +515,42 @@ ScreenManager:
             root_screen = self.root.get_screen('navigation')
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
             
-            # Jika zoom kembali ke minimum
             if scatter.scale <= 1.0:
                 scatter.scale = 1.0 
-                # SEMBUNYIKAN dan NON-AKTIFKAN D-Pad
                 root_screen.ids.dpad_layout.opacity = 0.0
                 root_screen.ids.dpad_layout.disabled = True
                 
-                # [ --- PERUBAHAN 4 DI SINI (Reset Pan) --- ]
-                # RESET transform (pan) ke posisi awal
-                scatter.transform = Matrix()
+                # [ --- PERUBAHAN 3 DI SINI (Reset Pos) --- ]
+                # RESET posisi scatter ke posisi semula
+                scatter.pos = root_screen.ids.map_container.pos
                 # [ --------------------------------------- ]
             
-    # [ --- PERUBAHAN 5 DI SINI (Logika Pan Diperbaiki) --- ]
-    # --- FUNGSI-FUNGSI PAN (Menggunakan Matrix Transform) ---
+    # [ --- PERUBAHAN 4 DI SINI (Logika Pan Diperbaiki) --- ]
+    # --- FUNGSI-FUNGSI PAN (Menggunakan scatter.x dan scatter.y) ---
     def pan_map_up(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke atas = translate Y positif
-            translation = Matrix().translate(0, self.PAN_STEP, 0)
-            scatter.transform = translation.multiply(scatter.transform)
+            # Menggeser peta ke atas = Widget Scatter bergerak ke bawah
+            scatter.y -= self.PAN_STEP
 
     def pan_map_down(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke bawah = translate Y negatif
-            translation = Matrix().translate(0, -self.PAN_STEP, 0)
-            scatter.transform = translation.multiply(scatter.transform)
+            # Menggeser peta ke bawah = Widget Scatter bergerak ke atas
+            scatter.y += self.PAN_STEP
 
     def pan_map_left(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke kiri = translate X negatif
-            translation = Matrix().translate(-self.PAN_STEP, 0, 0)
-            scatter.transform = translation.multiply(scatter.transform)
+            # Menggeser peta ke kiri = Widget Scatter bergerak ke kanan
+            scatter.x += self.PAN_STEP
 
     def pan_map_right(self):
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke kanan = translate X positif
-            translation = Matrix().translate(self.PAN_STEP, 0, 0)
-            scatter.transform = translation.multiply(scatter.transform)
-    # --- [ AKHIR PERUBAHAN 5 ] ---
+            # Menggeser peta ke kanan = Widget Scatter bergerak ke kiri
+            scatter.x -= self.PAN_STEP
+    # --- [ AKHIR PERUBAHAN 4 ] ---
 
 
     # --- FUNGSI LAMA (Tidak diubah) ---
