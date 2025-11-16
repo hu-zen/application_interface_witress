@@ -12,7 +12,6 @@ from kivy.uix.image import Image
 from kivy.uix.behaviors import TouchRippleBehavior, ButtonBehavior
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.core.window import Window
-from kivy.uix.widget import Widget # <-- 1. IMPORT Widget UNTUK D-PAD SPACER
 import yaml
 import math
 import os
@@ -49,7 +48,6 @@ class NavSelectionScreen(Screen):
 class ImageButton(ButtonBehavior, Image):
     pass
 
-# KELAS MAPIMAGE INI KEMBALI SEPERTI ASLI (TIDAK ADA PERUBAHAN)
 class MapImage(TouchRippleBehavior, Image):
     """
     Kelas ini menggunakan logika on_touch_down dari referensi Anda.
@@ -64,7 +62,8 @@ class MapImage(TouchRippleBehavior, Image):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Baris ini SUDAH BENAR di kode Anda (bold=True)
+            # <-- *** PERBAIKAN KESALAHAN SYNTAX ADA DI SINI ***
+            # bold:True telah diganti menjadi bold=True
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -178,10 +177,6 @@ class NavigationScreen(Screen):
 # KELAS APLIKASI UTAMA
 # ==================================
 class MainApp(App):
-    
-    # <-- 2. TAMBAHKAN PROPERTI INI UNTUK MENGATUR JARAK GESER
-    PAN_STEP = 50  # Jumlah piksel per geseran
-
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         Window.maximize()
@@ -227,7 +222,6 @@ class MainApp(App):
             pos: self.pos
             size: self.size
             
-# <-- 1. CLASS TOMBOL ZOOM DITAMBAHKAN
 <MapControlButton@Button>:
     font_size: '30sp'
     size_hint: (1, 1)
@@ -254,7 +248,7 @@ class MainApp(App):
     FloatLayout:
         canvas.before:
             Color:
-                rgba: 1, 1, 1, 1     # PUTIH penuh
+                rgba: 1, 1, 1, 1      # PUTIH penuh
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -320,7 +314,7 @@ class MainApp(App):
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
-# <-- 3. MODIFIKASI KV <NavigationScreen> (PENAMBAHAN D-PAD)
+# <-- MODIFIKASI DIMULAI DI SINI
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -340,7 +334,7 @@ class MainApp(App):
                 do_scale: True
                 do_translation: True
                 scale_min: 1.0
-                scale_max: 8.0     # Batas zoom maksimum
+                scale_max: 8.0
                 auto_bring_to_front: False
 
                 MapImage:
@@ -351,11 +345,11 @@ class MainApp(App):
                     size_hint: (None, None)
                     size: self.parent.size 
 
-            # --- TOMBOL ZOOM (Tetap ada di kanan) ---
+            # --- TOMBOL ZOOM (Sudah ada) ---
             BoxLayout:
                 orientation: 'vertical'
                 size_hint: (None, None)
-                size: ('60dp', '130dp') # Lebar 60, Tinggi 130
+                size: ('60dp', '130dp')
                 pos_hint: {'right': 0.98, 'center_y': 0.5}
                 spacing: 10
                 
@@ -366,38 +360,39 @@ class MainApp(App):
                     text: "-"
                     on_press: app.zoom_out()
             
-            # --- [KODE BARU] TOMBOL PAN D-PAD (Ditambahkan di kiri) ---
+            # --- 1. TOMBOL PAN (D-PAD) DITAMBAHKAN ---
             GridLayout:
                 cols: 3
                 size_hint: (None, None)
-                size: ('180dp', '180dp') # 60dp per sel
-                pos_hint: {'left': 0.02, 'center_y': 0.5}
-                spacing: 5 # Spasi antar tombol
-
-                # Baris 1: Tombol ATAS
-                Widget: # Spacer
+                size: ('180dp', '180dp')
+                pos_hint: {'left': 0.02, 'bottom': 0.02}
+                
+                # Baris 1
+                Widget()
                 MapControlButton:
-                    text: "▲" # Panah Atas
-                    on_press: app.pan_map_up()
-                Widget: # Spacer
-
-                # Baris 2: Tombol KIRI & KANAN
+                    text: "^"
+                    on_press: app.pan_map(0, -1) # Atas
+                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
+                Widget()
+                
+                # Baris 2
                 MapControlButton:
-                    text: "◄" # Panah Kiri
-                    on_press: app.pan_map_left()
-                Widget: # Spacer (Tengah)
+                    text: "<"
+                    on_press: app.pan_map(1, 0) # Kiri
+                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
+                Widget() # Spasi tengah
                 MapControlButton:
-                    text: "►" # Panah Kanan
-                    on_press: app.pan_map_right()
-
-                # Baris 3: Tombol BAWAH
-                Widget: # Spacer
+                    text: ">"
+                    on_press: app.pan_map(-1, 0) # Kanan
+                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
+                
+                # Baris 3
+                Widget()
                 MapControlButton:
-                    text: "▼" # Panah Bawah
-                    on_press: app.pan_map_down()
-                Widget: # Spacer
-            # --- [AKHIR KODE BARU] ---
-            
+                    text: "v"
+                    on_press: app.pan_map(0, 1) # Bawah
+                    disabled: scatter_map.scale == 1.0 # <-- LOGIKA BARU
+                Widget()
 
         # Bagian tombol-tombol di bawah ini tetap sama
         BoxLayout:
@@ -420,6 +415,7 @@ class MainApp(App):
                 source: 'go_back.png'
                 size_hint_y: 1.1
                 on_press: app.exit_navigation_mode()
+# <-- MODIFIKASI SELESAI
 
 # ==================================
 # SCREEN MANAGER UTAMA
@@ -542,7 +538,7 @@ ScreenManager:
     # ==================================
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
-    
+
     def _get_map_scatter(self):
         """Helper untuk mendapatkan widget Scatter."""
         try:
@@ -550,7 +546,6 @@ ScreenManager:
         except Exception:
             return None
 
-    # --- FUNGSI ZOOM (Sudah ada) ---
     def zoom_in(self):
         scatter = self._get_map_scatter()
         if scatter:
@@ -561,32 +556,17 @@ ScreenManager:
         if scatter:
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
             
-    # --- [KODE BARU] FUNGSI-FUNGSI PAN ---
-    def pan_map_up(self):
+    # <-- 2. FUNGSI PAN DITAMBAHKAN
+    def pan_map(self, direction_x, direction_y):
+        """
+        Menggeser Scatter.
+        direction_x/y adalah 1, 0, or -1.
+        """
         scatter = self._get_map_scatter()
         if scatter:
-            # Menggeser ke atas berarti mengurangi Y
-            scatter.y -= self.PAN_STEP
-
-    def pan_map_down(self):
-        scatter = self._get_map_scatter()
-        if scatter:
-            # Menggeser ke bawah berarti menambah Y
-            scatter.y += self.PAN_STEP
-
-    def pan_map_left(self):
-        scatter = self._get_map_scatter()
-        if scatter:
-            # Menggeser ke kiri berarti menambah X
-            scatter.x += self.PAN_STEP
-
-    def pan_map_right(self):
-        scatter = self._get_map_scatter()
-        if scatter:
-            # Menggeser ke kanan berarti mengurangi X
-            scatter.x -= self.PAN_STEP
-    # --- [AKHIR KODE BARU] ---
-
+            pan_step = 30 # '30dp'
+            scatter.x += pan_step * direction_x
+            scatter.y += pan_step * direction_y
 
     # --- FUNGSI LAMA ---
 
