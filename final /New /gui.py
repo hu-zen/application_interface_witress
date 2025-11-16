@@ -40,8 +40,8 @@ class NavSelectionScreen(Screen):
             grid.add_widget(Label(text="Tidak ada peta ditemukan.", color=(0,0,0,1)))
             return
         for name in map_names:
-            # <-- 1. TOMBOL DIPERBESAR DI SINI
-            btn = Button(text=name, size_hint_y=None, height='70dp', font_size='22sp')
+            # <-- MODIFIKASI: Sesuai pembaruan Anda
+            btn = Button(text=name, size_hint_y=None, height='120dp', font_size='50sp')
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
@@ -56,6 +56,8 @@ class MapImage(TouchRippleBehavior, Image):
     marker = ObjectProperty(None, allownone=True)
 
     def on_touch_down(self, touch):
+        # Logika on_touch_down ini sudah benar dan akan bekerja
+        # di dalam Scatter karena `touch.pos` adalah koordinat global.
         if self.collide_point(*touch.pos):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
@@ -89,7 +91,13 @@ class NavigationScreen(Screen):
         if not self.robot_marker:
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
-            self.ids.map_container.add_widget(self.robot_marker)
+            
+            # <-- MODIFIKASI 1: Tambahkan marker ke 'scatter_map', BUKAN 'map_container'
+            self.ids.scatter_map.add_widget(self.robot_marker)
+        
+        # Reset zoom/pan saat masuk layar
+        self.ids.scatter_map.scale = 1.0
+        self.ids.scatter_map.pos = self.ids.map_container.pos
         
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
         self.selected_goal_coords = None
@@ -154,10 +162,18 @@ class NavigationScreen(Screen):
         pixel_y = (pose['y'] - origin_y) / resolution
 
         # 2. Konversi dari piksel ke posisi di dalam widget (termasuk offset)
+        # Perhitungan ini masih menghasilkan KOORDINAT GLOBAL (WINDOW)
         pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
         pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
         
-        self.robot_marker.center = (pos_in_widget_x, pos_in_widget_y)
+        
+        # <-- MODIFIKASI 2: Konversi koordinat global ke lokal 'Scatter'
+        scatter = self.ids.scatter_map
+        # Ambil koordinat global (pos_in_widget_x/y) dan ubah ke 
+        # koordinat lokal di dalam Scatter.
+        local_pos = scatter.to_local(pos_in_widget_x, pos_in_widget_y)
+        
+        self.robot_marker.center = local_pos
         self.robot_marker.angle = -math.degrees(pose['yaw'])
 
 # ==================================
@@ -253,7 +269,6 @@ class MainApp(App):
             on_press:
                 app.root.current = 'main_menu'
 
-# <-- MODIFIKASI DIMULAI DI SINI
 <NavSelectionScreen>:
     BoxLayout:
         orientation: 'vertical'
@@ -266,14 +281,12 @@ class MainApp(App):
             allow_stretch: True
             keep_ratio: True
             
-        # Layout horizontal untuk menampung ScrollView dan Tombol Scroll
         BoxLayout:
             orientation: 'horizontal'
             spacing: 10
-            # size_hint_y: 0.6 (biarkan default agar mengisi sisa ruang)
             
             ScrollView:
-                id: map_scroll # <-- ID DITAMBAHKAN
+                id: map_scroll
                 GridLayout:
                     id: nav_map_grid
                     cols: 1
@@ -281,42 +294,59 @@ class MainApp(App):
                     height: self.minimum_height
                     spacing: 10
             
-            # Layout vertikal untuk tombol scroll
             BoxLayout:
                 orientation: 'vertical'
                 size_hint_x: None
-                width: '90dp' # Lebar tetap untuk tombol scroll
+                width: '90dp'
                 spacing: 10
                 
                 ImageButton:
-                    source: 'scroll_up.png' # <-- TOMBOL BARU
+                    source: 'scroll_up.png'
                     on_press: app.scroll_map_list_up()
                 ImageButton:
-                    source: 'scroll_down.png' # <-- TOMBOL BARU
+                    source: 'scroll_down.png'
                     on_press: app.scroll_map_list_down()
 
         ImageButton:
             source: 'go_back.png'
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
-# <-- MODIFIKASI SELESAI
             
+# <-- MODIFIKASI 3: Tata Letak KV <NavigationScreen>
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
         orientation: 'vertical'
         padding: 10
         spacing: 10
+        
         FloatLayout:
             id: map_container
             size_hint: 1, 1
-            MapImage:
-                id: map_viewer
-                source: ''
-                allow_stretch: True
-                keep_ratio: True
-                size_hint: 1, 1
+            
+            # Scatter adalah widget yang menangani zoom/pan
+            Scatter:
+                id: scatter_map
+                size_hint: (1, 1)
                 pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+                do_rotation: False  # Matikan rotasi
+                do_scale: True      # Izinkan zoom (pinch/scroll)
+                do_translation: True  # Izinkan pan (geser)
+                scale_min: 1.0        # Peta tidak bisa lebih kecil dari layar
+                auto_bring_to_front: False # Agar tidak mengganggu marker
+
+                # MapImage sekarang ada DI DALAM Scatter
+                MapImage:
+                    id: map_viewer
+                    source: ''
+                    allow_stretch: True
+                    keep_ratio: True
+                    # size_hint (None, None) dan size: self.parent.size
+                    # sangat penting agar Scatter tahu ukuran kontennya.
+                    size_hint: (None, None)
+                    size: self.parent.size 
+
+        # Bagian tombol-tombol di bawah ini tetap sama
         BoxLayout:
             size_hint_y: None
             height: '60dp'
@@ -460,12 +490,10 @@ ScreenManager:
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
 
-    # <-- 2. FUNGSI BARU DITAMBAHKAN DI SINI
     def scroll_map_list_up(self):
         try:
             scroll = self.root.get_screen('nav_selection').ids.map_scroll
-            # Menambah scroll_y (1.0 adalah paling atas)
-            new_scroll = min(1.0, scroll.scroll_y + 0.1) # 0.1 = 10%
+            new_scroll = min(1.0, scroll.scroll_y + 0.1)
             scroll.scroll_y = new_scroll
         except Exception as e:
             print(f"Error scrolling up: {e}")
@@ -473,14 +501,11 @@ ScreenManager:
     def scroll_map_list_down(self):
         try:
             scroll = self.root.get_screen('nav_selection').ids.map_scroll
-            # Mengurangi scroll_y (0.0 adalah paling bawah)
-            new_scroll = max(0.0, scroll.scroll_y - 0.1) # 0.1 = 10%
+            new_scroll = max(0.0, scroll.scroll_y - 0.1)
             scroll.scroll_y = new_scroll
         except Exception as e:
             print(f"Error scrolling down: {e}")
     
-    # --- FUNGSI LAMA ---
-
     def calculate_ros_goal(self, touch, image_widget):
         """
         Fungsi ini 100% menggunakan logika dari file referensi Anda yang akurat.
@@ -514,7 +539,7 @@ ScreenManager:
         
         if scale == 0: return
 
-        # Kalkulasi ini menggunakan `touch.pos` (lokal) dan `offset` dari logika Anda
+        # Kalkulasi ini menggunakan `touch.pos` (global) dan `offset` dari logika Anda
         # Pengurangan `image_widget.x` dan `image_widget.y` tetap dipertahankan
         # sesuai referensi akurat Anda.
         touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
