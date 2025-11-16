@@ -60,7 +60,8 @@ class MapImage(TouchRippleBehavior, Image):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold:True)
+            # <-- MODIFIKASI DI SINI: bold:True diubah menjadi bold=True
+            new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
             self.marker = new_marker
@@ -309,7 +310,6 @@ class MainApp(App):
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
-# <-- MODIFIKASI DIMULAI DI SINI
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -406,7 +406,6 @@ class MainApp(App):
                 source: 'go_back.png'
                 size_hint_y: 1.1
                 on_press: app.exit_navigation_mode()
-# <-- MODIFIKASI SELESAI
 
 # ==================================
 # SCREEN MANAGER UTAMA
@@ -530,8 +529,6 @@ ScreenManager:
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
 
-    # <-- 3. FUNGSI BARU DITAMBAHKAN DI SINI
-    
     def _get_map_scatter(self):
         """Helper untuk mendapatkan widget Scatter."""
         try:
@@ -557,19 +554,8 @@ ScreenManager:
         scatter = self._get_map_scatter()
         if scatter:
             pan_step = 30 # '30dp'
-            
-            # PENTING: Saat menekan 'Atas' (dir_y = -1), 
-            # scatter bergerak ke BAWAH (pos.y -= pan_step).
-            # Logika di KV sudah benar (0, -1).
-            
-            # Saat menekan 'Kiri' (dir_x = 1),
-            # scatter bergerak ke KANAN (pos.x += pan_step).
-            # Logika di KV sudah benar (1, 0).
-            
             scatter.x += pan_step * direction_x
             scatter.y += pan_step * direction_y
-
-    # --- FUNGSI LAMA ---
 
     def scroll_map_list_up(self):
         try:
@@ -620,7 +606,6 @@ ScreenManager:
         
         if scale == 0: return
 
-        # Logika ini TETAP AKURAT bahkan setelah di-zoom/pan
         touch_on_image_x = touch.pos[0] - image_widget.x - offset_x
         touch_on_image_y = touch.pos[1] - image_widget.y - offset_y
         
