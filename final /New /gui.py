@@ -345,7 +345,6 @@ ScreenManager:
                 font_size: '22sp'
                 on_press: sm.current = 'nav_selection'
                 
-    # <-- MODIFIKASI DIMULAI DI SINI
     Screen:
         name: 'pre_mapping'
         BoxLayout:
@@ -366,13 +365,11 @@ ScreenManager:
                 text: 'Mulai Mapping'
                 font_size: '22sp'
                 on_press: app.go_to_mapping_mode(map_name_input.text)
-                # BARIS INI DITAMBAHKAN:
-                disabled: not map_name_input.text.strip()
+                disabled: not map_name_input.text
             ImageButton:
                 source: 'go_back.png'
                 size_hint_y: 0.4
                 on_press: sm.current = 'main_menu'
-    # <-- MODIFIKASI SELESAI
                 
     Screen:
         name: 'controller'
@@ -390,6 +387,7 @@ ScreenManager:
                 size_hint_y: 0.2
                 on_press: app.exit_controller_mode()
                 
+    # <-- MODIFIKASI DIMULAI DI SINI
     Screen:
         name: 'mapping'
         BoxLayout:
@@ -405,10 +403,26 @@ ScreenManager:
                 text: 'Memetakan: '
                 font_size: '18sp'
                 color: 0.4, 0.4, 0.4, 1
-            Button:
-                text: 'Selesai Mapping & Simpan Otomatis'
-                font_size: '22sp'
-                on_press: app.exit_mapping_mode()
+                
+            # Layout baru untuk menampung 2 tombol
+            BoxLayout:
+                orientation: 'horizontal'
+                spacing: 10
+                size_hint_y: None
+                height: self.minimum_height # Biarkan tinggi mengikuti tombol
+                
+                Button:
+                    text: 'Selesai Mapping & Simpan Otomatis'
+                    font_size: '22sp'
+                    on_press: app.exit_mapping_mode()
+                    
+                Button:
+                    text: 'Batalkan (Tanpa Simpan)'
+                    font_size: '22sp'
+                    on_press: app.cancel_mapping_mode() # <-- PANGGIL FUNGSI BARU
+                    background_color: 0.8, 0.2, 0.2, 1 # Beri warna merah
+    # <-- MODIFIKASI SELESAI
+            
     NavSelectionScreen:
         name: 'nav_selection'
     NavigationScreen:
@@ -529,6 +543,15 @@ pose:
 
     def _finish_exit_mapping(self, dt):
         self.manager.stop_mapping()
+        self.root.current = 'main_menu'
+
+    # <-- 1. FUNGSI BARU DITAMBAHKAN DI SINI
+    def cancel_mapping_mode(self):
+        self.update_status_label('mapping', 'mapping_status_label', 'Membatalkan...\\nTidak menyimpan peta.')
+        Clock.schedule_once(self._finish_cancel_mapping, 1)
+
+    def _finish_cancel_mapping(self, dt):
+        self.manager.cancel_mapping() # Memanggil fungsi baru di manager
         self.root.current = 'main_menu'
 
     def start_navigation_with_map(self, map_name, *args):
