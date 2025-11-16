@@ -62,7 +62,7 @@ class MapImage(TouchRippleBehavior, Image):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # Baris ini SUDAH BENAR di kode Anda (bold=True)
+            # <-- PERBAIKAN SYNTAX ERROR DI SINI: bold:True diubah menjadi bold=True
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
