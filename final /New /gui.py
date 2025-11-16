@@ -201,11 +201,7 @@ class MainApp(App):
 <MapControlButton@Button>:
     font_size: '30sp'
     size_hint: (1, 1)
-    
-    # [ --- PERUBAHAN DI SINI --- ]
-    # Alpha diubah dari 0.8 menjadi 0.5 untuk transparansi lebih
-    background_color: 0.2, 0.2, 0.2, 0.5
-    # [ --- AKHIR PERUBAHAN --- ]
+    background_color: 0.2, 0.2, 0.2, 0.5 # Transparansi 0.5
 
 # ==================================
 # ATURAN WIDGET CUSTOM
@@ -316,12 +312,15 @@ class MainApp(App):
                     size_hint: (None, None)
                     size: self.parent.size 
 
-            # --- TOMBOL ZOOM (Baru di Kiri Bawah) ---
+            # [ --- PERUBAHAN UKURAN DI SINI --- ]
+
+            # --- TOMBOL ZOOM (Kiri Bawah) ---
             BoxLayout:
                 orientation: 'vertical'
                 size_hint: (None, None)
-                size: ('80dp', '170dp') # Lebih besar
-                pos_hint: {'x': 0.02, 'y': 0.02} # Pindah ke kiri bawah
+                # Ukuran diubah dari 80dp/170dp menjadi 60dp/130dp
+                size: ('60dp', '130dp') 
+                pos_hint: {'x': 0.02, 'y': 0.02} 
                 spacing: 10
                 MapControlButton:
                     text: "+"
@@ -330,38 +329,40 @@ class MainApp(App):
                     text: "-"
                     on_press: app.zoom_out()
             
-            # --- TOMBOL PAN (Baru di Tepi) ---
+            # --- TOMBOL PAN (Tepi) ---
             MapControlButton:
                 id: dpad_up
                 text: "^"
                 size_hint: (None, None)
-                size: ('80dp', '80dp') # Lebih besar
-                pos_hint: {'center_x': 0.5, 'top': 0.98} # Tepi atas
+                size: ('60dp', '60dp') # Diubah dari 80dp
+                pos_hint: {'center_x': 0.5, 'top': 0.98} 
                 on_press: app.pan_map_up()
 
             MapControlButton:
                 id: dpad_down
                 text: "v"
                 size_hint: (None, None)
-                size: ('80dp', '80dp') # Lebih besar
-                pos_hint: {'center_x': 0.5, 'y': 0.02} # Tepi bawah
+                size: ('60dp', '60dp') # Diubah dari 80dp
+                pos_hint: {'center_x': 0.5, 'y': 0.02} 
                 on_press: app.pan_map_down()
 
             MapControlButton:
                 id: dpad_left
                 text: "<"
                 size_hint: (None, None)
-                size: ('80dp', '80dp') # Lebih besar
-                pos_hint: {'x': 0.02, 'center_y': 0.5} # Tepi kiri
+                size: ('60dp', '60dp') # Diubah dari 80dp
+                pos_hint: {'x': 0.02, 'center_y': 0.5} 
                 on_press: app.pan_map_left()
 
             MapControlButton:
                 id: dpad_right
                 text: ">"
                 size_hint: (None, None)
-                size: ('80dp', '80dp') # Lebih besar
-                pos_hint: {'right': 0.98, 'center_y': 0.5} # Tepi kanan
+                size: ('60dp', '60dp') # Diubah dari 80dp
+                pos_hint: {'right': 0.98, 'center_y': 0.5} 
                 on_press: app.pan_map_right()
+            
+            # [ --- AKHIR PERUBAHAN UKURAN --- ]
 
         # Bagian tombol bawah (Status, Navigasi, Back)
         BoxLayout:
@@ -505,6 +506,8 @@ ScreenManager:
         except Exception:
             return None
 
+    # Fungsi Python TIDAK PERLU DIUBAH sama sekali
+    # Mereka sudah mereferensikan 'id', bukan ukuran.
     def set_dpad_visibility(self, is_visible):
         """Mengatur visibilitas semua tombol D-Pad."""
         try:
@@ -512,7 +515,6 @@ ScreenManager:
             opacity_val = 1.0 if is_visible else 0.0
             disabled_val = not is_visible
             
-            # Kontrol 4 tombol baru
             root_screen.ids.dpad_up.opacity = opacity_val
             root_screen.ids.dpad_down.opacity = opacity_val
             root_screen.ids.dpad_left.opacity = opacity_val
@@ -529,7 +531,6 @@ ScreenManager:
         scatter = self._get_map_scatter()
         if scatter:
             scatter.scale = min(scatter.scale * 1.2, scatter.scale_max)
-            # MUNCULKAN dan AKTIFKAN D-Pad
             self.set_dpad_visibility(True)
 
     def zoom_out(self):
@@ -539,13 +540,10 @@ ScreenManager:
             
             if scatter.scale <= 1.0:
                 scatter.scale = 1.0 
-                # SEMBUNYIKAN dan NON-AKTIFKAN D-Pad
                 self.set_dpad_visibility(False)
-                # RESET posisi scatter ke posisi semula
                 root_screen = self.root.get_screen('navigation')
                 scatter.pos = root_screen.ids.map_container.pos
             
-    # --- FUNGSI-FUNGSI PAN (Logika geser scatter.x/y sudah benar) ---
     def pan_map_up(self):
         scatter = self._get_map_scatter()
         if scatter:
@@ -565,8 +563,6 @@ ScreenManager:
         scatter = self._get_map_scatter()
         if scatter:
             scatter.x -= self.PAN_STEP
-    # --- Akhir Fungsi Pan ---
-
 
     # --- FUNGSI LAMA (Tidak diubah) ---
     def scroll_map_list_up(self):
