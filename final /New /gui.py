@@ -274,7 +274,7 @@ class MainApp(App):
         # <-- 1. PERUBAHAN DI NAV SELECTION SCREEN
         ImageButton:
             source: 'go_back.png'
-            size_hint_y: 0.15 # Biarkan ukuran sama seperti tombol sebelumnya
+            size_hint_y: 0.2 # Biarkan ukuran sama seperti tombol sebelumnya
             on_press: root.manager.current = 'main_menu'
             
 <NavigationScreen>:
@@ -313,6 +313,7 @@ class MainApp(App):
             ImageButton:
                 source: 'go_back.png'
                 # Hapus font_size, ganti text dengan source
+                size_hint_y: 1.1
                 on_press: app.exit_navigation_mode()
 
 # ==================================
@@ -366,9 +367,10 @@ ScreenManager:
                 text: 'Mulai Mapping'
                 font_size: '22sp'
                 on_press: app.go_to_mapping_mode(map_name_input.text)
-            Button:
-                text: 'Kembali ke Menu'
-                font_size: '22sp'
+            ImageButton:
+                source: 'go_back.png'
+                # Hapus font_size, ganti text dengan source
+                size_hint_y: 0.4
                 on_press: sm.current = 'main_menu'
                 
     Screen:
@@ -386,8 +388,7 @@ ScreenManager:
             ImageButton:
                 source: 'go_back.png'
                 # Ganti text dan font_size dengan source
-                size_hint_y: None # Buat ukurannya tidak stretch
-                height: '60dp'     # Beri tinggi yang pasti
+                size_hint_y: 0.2
                 on_press: app.exit_controller_mode()
                 
     Screen:
