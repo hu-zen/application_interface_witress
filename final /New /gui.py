@@ -62,7 +62,7 @@ class MapImage(TouchRippleBehavior, Image):
             if self.marker and self.marker.parent:
                 self.remove_widget(self.marker)
 
-            # <-- PERBAIKAN SYNTAX ERROR DI SINI: bold:True diubah menjadi bold=True
+            # Baris ini SUDAH BENAR di kode Anda (bold=True)
             new_marker = Label(text='X', font_size='30sp', color=(1, 0, 0, 1), bold=True)
             new_marker.center = touch.pos
             self.add_widget(new_marker)
@@ -221,6 +221,7 @@ class MainApp(App):
             pos: self.pos
             size: self.size
             
+# <-- 1. CLASS TOMBOL ZOOM DITAMBAHKAN
 <MapControlButton@Button>:
     font_size: '30sp'
     size_hint: (1, 1)
@@ -313,7 +314,7 @@ class MainApp(App):
             size_hint_y: 0.2 
             on_press: root.manager.current = 'main_menu'
             
-# <-- MODIFIKASI DIMULAI DI SINI
+# <-- 2. MODIFIKASI KV <NavigationScreen>
 <NavigationScreen>:
     name: 'navigation'
     BoxLayout:
@@ -333,7 +334,7 @@ class MainApp(App):
                 do_scale: True
                 do_translation: True
                 scale_min: 1.0
-                scale_max: 8.0
+                scale_max: 8.0      # Batas zoom maksimum
                 auto_bring_to_front: False
 
                 MapImage:
@@ -344,11 +345,11 @@ class MainApp(App):
                     size_hint: (None, None)
                     size: self.parent.size 
 
-            # --- TOMBOL ZOOM (Sudah ada) ---
+            # --- TOMBOL ZOOM ---
             BoxLayout:
                 orientation: 'vertical'
                 size_hint: (None, None)
-                size: ('60dp', '130dp')
+                size: ('60dp', '130dp') # Lebar 60, Tinggi 130
                 pos_hint: {'right': 0.98, 'center_y': 0.5}
                 spacing: 10
                 
@@ -359,35 +360,8 @@ class MainApp(App):
                     text: "-"
                     on_press: app.zoom_out()
             
-            # --- 1. TOMBOL PAN (D-PAD) DITAMBAHKAN ---
-            GridLayout:
-                cols: 3
-                size_hint: (None, None)
-                size: ('180dp', '180dp')
-                pos_hint: {'left': 0.02, 'bottom': 0.02}
-                
-                # Baris 1
-                Widget()
-                MapControlButton:
-                    text: "^"
-                    on_press: app.pan_map(0, -1) # Atas
-                Widget()
-                
-                # Baris 2
-                MapControlButton:
-                    text: "<"
-                    on_press: app.pan_map(1, 0) # Kiri
-                Widget() # Spasi tengah
-                MapControlButton:
-                    text: ">"
-                    on_press: app.pan_map(-1, 0) # Kanan
-                
-                # Baris 3
-                Widget()
-                MapControlButton:
-                    text: "v"
-                    on_press: app.pan_map(0, 1) # Bawah
-                Widget()
+            # (Tombol D-Pad Pan tidak ditambahkan)
+            
 
         # Bagian tombol-tombol di bawah ini tetap sama
         BoxLayout:
@@ -410,7 +384,6 @@ class MainApp(App):
                 source: 'go_back.png'
                 size_hint_y: 1.1
                 on_press: app.exit_navigation_mode()
-# <-- MODIFIKASI SELESAI
 
 # ==================================
 # SCREEN MANAGER UTAMA
@@ -534,6 +507,8 @@ ScreenManager:
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
 
+    # <-- 3. FUNGSI ZOOM DITAMBAHKAN
+    
     def _get_map_scatter(self):
         """Helper untuk mendapatkan widget Scatter."""
         try:
@@ -551,17 +526,7 @@ ScreenManager:
         if scatter:
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
             
-    # <-- 2. FUNGSI PAN DITAMBAHKAN
-    def pan_map(self, direction_x, direction_y):
-        """
-        Menggeser Scatter.
-        direction_x/y adalah 1, 0, or -1.
-        """
-        scatter = self._get_map_scatter()
-        if scatter:
-            pan_step = 30 # '30dp'
-            scatter.x += pan_step * direction_x
-            scatter.y += pan_step * direction_y
+    # (Fungsi pan_map tidak ditambahkan)
 
     # --- FUNGSI LAMA ---
 
