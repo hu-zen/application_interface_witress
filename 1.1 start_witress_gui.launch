@@ -1,6 +1,1 @@
-<launch>
-    <node name="robot_manager_node" pkg="waiterbot_gui" type="robot_manager.py" output="screen" />
-
-    <node name="gui_node" pkg="waiterbot_gui" type="gui_app.py" output="screen" />
-
-</launch>
+https://www.canva.com/design/DAG46hL32cw/-JeN1MUsbC2KxM5K53678w/edit?ui=eyJEIjp7IkoiOnsiRCI6eyJBPyI6IkEifX19fQ
