@@ -1,0 +1,28 @@
+untuk bagian control center
+Image:
+  source:'waiter_bot_control_center.png'
+  size_hint_y: None
+  height:'100dp'
+  allow_stretch: True
+  keep_ratio: True
+
+untuk bagian controller
+Image:
+  source:'use_controller_move_the_robot.png'
+  size_hint_y: 0.8
+  allow_stretch: True
+  keep_ratio: True
+
+untuk bagian premapping
+Image:
+  source:'name_your_map.png'
+  size_hint_y: 0.8
+  allow_stretch: True
+  keep_ratio: True
+
+untuk bagian mapping
+Image:
+  source:'mapping_on_progress.png'
+  size_hint_y: 0.8
+  allow_stretch: True
+  keep_ratio: True
