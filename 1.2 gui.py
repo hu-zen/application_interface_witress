@@ -285,7 +285,10 @@ class MainApp(App):
                     on_press: app.scroll_map_list_down()
         ImageButton:
             source: 'go_back.png'
-            size_hint_y: 0.2 
+            size_hint_y: None
+            height: '150dp'
+            size_hint_x: 0.8
+            pos_hint: {'center_x': 0.5}
             on_press: root.manager.current = 'main_menu'
             
 <NavigationScreen>:
