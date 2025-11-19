@@ -46,31 +46,18 @@ class NavSelectionScreen(Screen):
             btn.bind(on_press=partial(app.start_navigation_with_map, name))
             grid.add_widget(btn)
 
-# [ --- PERUBAHAN UTAMA DI SINI --- ]
-# Logika Collide Point untuk mengatasi "Jarak Tekan/Dead Space"
 class ImageButton(ButtonBehavior, Image):
     def collide_point(self, x, y):
-        # 1. Cek apakah sentuhan ada di dalam kotak widget dasar
         if not super().collide_point(x, y):
             return False
-        
-        # 2. LOGIKA PINTAR: Cek apakah sentuhan ada di dalam GAMBAR yang dirender
-        # Ini memotong area kosong jika widget lebih besar dari gambar
         if self.texture:
-            # Ambil ukuran gambar yang sebenarnya ditampilkan (setelah keep_ratio)
             norm_w, norm_h = self.norm_image_size
-            
-            # Hitung posisi gambar (biasanya di tengah widget)
             x_off = self.x + (self.width - norm_w) / 2
             y_off = self.y + (self.height - norm_h) / 2
-            
-            # Cek apakah sentuhan ada di dalam area gambar visual
             if x_off <= x <= x_off + norm_w and y_off <= y <= y_off + norm_h:
                 return True
             return False
-            
         return True
-# [ ------------------------------- ]
 
 class MapImage(TouchRippleBehavior, Image):
     marker = ObjectProperty(None, allownone=True)
@@ -405,7 +392,6 @@ ScreenManager:
     HomeScreen:
         name: 'home' 
         
-    # [ --- BAGIAN MENU UTAMA YANG DIMODIFIKASI --- ]
     Screen:
         name: 'main_menu'
         BoxLayout:
@@ -413,27 +399,21 @@ ScreenManager:
             padding: [20, 20, 20, 20] 
             spacing: 20 
             
-            Label:
-                text: 'Waiter Bot Control Center'
-                font_size: '30sp'
-                bold: True
-                # Batasi tinggi label agar tidak menekan tombol
+            Image:
+                source: 'waiter_bot_control_center.png'
                 size_hint_y: None
-                height: '50dp'
+                height: '100dp' 
+                allow_stretch: True
+                keep_ratio: True
                 
-            # --- TOMBOL 1 (Controller) ---
             ImageButton:
                 source: 'control_robot.png'
-                # Matikan size_hint_y agar kita bisa pakai 'height' manual
                 size_hint_y: None
-                # ATUR TINGGI DISINI (misal 180dp agar lebih besar)
                 height: '180dp'
-                # Agar gambar tidak terlalu melebar (80% lebar layar)
                 size_hint_x: 0.8
                 pos_hint: {'center_x': 0.5}
                 on_press: app.go_to_controller_mode()
                 
-            # --- TOMBOL 2 (Mapping) ---
             ImageButton:
                 source: 'make_a_map.png'
                 size_hint_y: None
@@ -442,7 +422,6 @@ ScreenManager:
                 pos_hint: {'center_x': 0.5}
                 on_press: sm.current = 'pre_mapping'
                 
-            # --- TOMBOL 3 (Navigation) ---
             ImageButton:
                 source: 'do_navigation.png'
                 size_hint_y: None
@@ -451,9 +430,7 @@ ScreenManager:
                 pos_hint: {'center_x': 0.5}
                 on_press: sm.current = 'nav_selection'
                 
-            # Spacer agar tombol naik sedikit ke atas (opsional)
             Widget:
-    # [ ------------------------------------------- ]
 
     Screen:
         name: 'pre_mapping'
@@ -480,53 +457,64 @@ ScreenManager:
                 source: 'go_back.png'
                 size_hint_y: 0.4
                 on_press: sm.current = 'main_menu'
+                
     Screen:
         name: 'controller'
         BoxLayout:
             orientation: 'vertical'
             padding: 40
             spacing: 20
-            Label:
-                id: controller_status_label
-                text: 'Status: Siap'
-                font_size: '20sp'
+            Image:
+                source: 'use_controller.png'
+                allow_stretch: True
+                keep_ratio: True
+                size_hint_y: 0.8 
             ImageButton:
                 source: 'go_back.png'
                 size_hint_y: 0.2
                 on_press: app.exit_controller_mode()
+
     Screen:
         name: 'mapping'
         BoxLayout:
             orientation: 'vertical'
             padding: 40
             spacing: 20
-            Label:
-                id: mapping_status_label
-                text: 'Status: Siap'
-                font_size: '20sp'
-            Label:
-                id: current_map_name_label
-                text: 'Memetakan: '
-                font_size: '18sp'
-                color: 0.4, 0.4, 0.4, 1
+            
+            Image:
+                source: 'mapping_on_progress.png'
+                allow_stretch: True
+                keep_ratio: True
+                size_hint_y: 0.8
+            
+            # [ --- PERUBAHAN TOMBOL MAPPING MENJADI PNG --- ]
             BoxLayout:
                 orientation: 'horizontal'
-                spacing: 10
+                spacing: 20
                 size_hint_y: None
-                height: self.minimum_height
-                Button:
-                    text: 'Selesai Mapping & Simpan Otomatis'
-                    font_size: '22sp'
+                # Saya naikkan sedikit tingginya agar gambar tombol leluasa
+                height: '120dp' 
+                
+                # Tombol Selesai/Simpan
+                ImageButton:
+                    source: 'finish_mapping.png' # Pastikan file ini ada
                     size_hint_y: None 
-                    height: '80dp'    
+                    height: '120dp'
+                    allow_stretch: True
+                    keep_ratio: True
+                    # size_hint_x default 1.0 (bagi dua rata dengan tombol sebelah)
                     on_press: app.exit_mapping_mode()
-                Button:
-                    text: 'Batalkan (Tanpa Simpan)'
-                    font_size: '22sp'
+                    
+                # Tombol Batalkan
+                ImageButton:
+                    source: 'cancel_mapping.png' # Pastikan file ini ada
                     size_hint_y: None 
-                    height: '80dp'    
+                    height: '120dp'    
+                    allow_stretch: True
+                    keep_ratio: True
                     on_press: app.cancel_mapping_mode()
-                    background_color: 0.8, 0.2, 0.2, 1 
+            # [ -------------------------------------------- ]
+                    
     NavSelectionScreen:
         name: 'nav_selection'
     NavigationScreen:
