@@ -127,19 +127,36 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
+        
+        # Validasi data: Pastikan pose robot, metadata peta, dan tekstur gambar sudah siap
         if pose is None or not app.manager.map_metadata or not map_viewer.texture:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
+            
         self.robot_marker.opacity = 1
+        
+        # 1. Ambil Metadata Peta (ROS Coordinate System)
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
+        
+        # 2. Hitung posisi Pixel murni berdasarkan Koordinat Dunia (Meter)
+        # Rumus: (PosisiRobot - TitikNolPeta) / Resolusi
+        pixel_x = (pose['x'] - origin_x) / resolution
+        pixel_y = (pose['y'] - origin_y) / resolution
+        
+        # 3. Hitung Skala & Offset Gambar (Letterboxing Logic)
+        # Kita harus tahu persis di mana gambar peta digambar di dalam widget MapViewer
         norm_w, norm_h = map_viewer.texture.size
-        if norm_w == 0 or norm_h == 0: return
         widget_w, widget_h = map_viewer.size
+        
+        if norm_w == 0 or norm_h == 0: return
+        
         img_ratio = norm_w / norm_h
         widget_ratio = widget_w / widget_h
+        
+        # Logika 'fit' (keep_ratio=True, allow_stretch=True)
         if widget_ratio > img_ratio:
             scale = widget_h / norm_h
             offset_x = (widget_w - norm_w * scale) / 2.0
@@ -148,16 +165,21 @@ class NavigationScreen(Screen):
             scale = widget_w / norm_w
             offset_x = 0.0
             offset_y = (widget_h - norm_h * scale) / 2.0
-        if scale == 0: return
-        pixel_x = (pose['x'] - origin_x) / resolution
-        pixel_y = (pose['y'] - origin_y) / resolution
-        pos_in_widget_x = (pixel_x * scale) + offset_x + map_viewer.x
-        pos_in_widget_y = (pixel_y * scale) + offset_y + map_viewer.y
-        scatter = self.ids.scatter_map
-        local_pos = scatter.to_local(pos_in_widget_x, pos_in_widget_y)
-        self.robot_marker.center = local_pos
-        self.robot_marker.angle = -math.degrees(pose['yaw'])
-
+            
+        # 4. Tentukan Posisi Akhir Marker
+        # Posisi ini RELATIF terhadap widget MapViewer.
+        # Karena MapViewer dan RobotMarker bersaudara di dalam Scatter,
+        # kita TIDAK PERLU menggunakan 'to_local' atau konversi layar.
+        marker_x = (pixel_x * scale) + offset_x + map_viewer.x
+        marker_y = (pixel_y * scale) + offset_y + map_viewer.y
+        
+        # Terapkan posisi ke Marker
+        self.robot_marker.center = (marker_x, marker_y)
+        
+        # 5. Terapkan Rotasi
+        # ROS menggunakan radian (CCW), Kivy menggunakan derajat (CCW).
+        # math.degrees mengkonversi radian ke derajat.
+        self.robot_marker.angle = math.degrees(pose['yaw'])
 # ==================================
 # KELAS APLIKASI UTAMA
 # ==================================
@@ -167,8 +189,8 @@ class MainApp(App):
 
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
-        Window.maximize()
-        
+       #Window.maximize() jika menggunkanan window
+        Window.fullscreen = 'auto'
         kv_design = """
 # ==================================
 # ATURAN GLOBAL
@@ -351,7 +373,7 @@ class MainApp(App):
                 text: "v"
                 size_hint: (None, None)
                 size: ('60dp', '60dp') # Diubah dari 80dp
-                pos_hint: {'center_x': 0.5, 'y': 0.02} 
+                pos_hint: {'center_x': 0.5, 'y': 0.10} 
                 on_press: app.pan_map_down()
 
             MapControlButton:
