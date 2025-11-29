@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# ===============================================
+# KONFIGURASI SISTEM (INPUT HYBRID & FIX)
+# ===============================================
 from kivy.config import Config
+
+# 1. Mode 'systemanddock': Izinkan keyboard laptop & layar sentuh bekerja bersama
 Config.set('kivy', 'keyboard_mode', 'systemanddock')
+
+# 2. Reset Input: Hapus driver sentuh otomatis yang menyebabkan 'double-touch'
 if Config.has_section('input'):
-	for key, value in Config.items('input'):
-		Config.remove_option('input', key)
+    for key, value in Config.items('input'):
+        Config.remove_option('input', key)
+
+# 3. Input Tunggal: Paksa Kivy hanya mendengarkan Mouse
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
+# ===============================================
+
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
@@ -55,7 +66,6 @@ class NavSelectionScreen(Screen):
 class ImageButton(ButtonBehavior, Image):
     pass
 
-# Kelas MapImage kembali seperti original, TIDAK diubah
 class MapImage(TouchRippleBehavior, Image):
     marker = ObjectProperty(None, allownone=True)
 
@@ -100,7 +110,6 @@ class NavigationScreen(Screen):
         scatter.scale = 1.0
         scatter.pos = self.ids.map_container.pos 
         
-        # Sembunyikan D-Pad (4 tombol baru) saat pertama kali masuk
         app.set_dpad_visibility(False)
 
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
@@ -128,26 +137,20 @@ class NavigationScreen(Screen):
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
         
-        # Validasi data: Pastikan pose robot, metadata peta, dan tekstur gambar sudah siap
         if pose is None or not app.manager.map_metadata or not map_viewer.texture:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
             
         self.robot_marker.opacity = 1
         
-        # 1. Ambil Metadata Peta (ROS Coordinate System)
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
         
-        # 2. Hitung posisi Pixel murni berdasarkan Koordinat Dunia (Meter)
-        # Rumus: (PosisiRobot - TitikNolPeta) / Resolusi
         pixel_x = (pose['x'] - origin_x) / resolution
         pixel_y = (pose['y'] - origin_y) / resolution
         
-        # 3. Hitung Skala & Offset Gambar (Letterboxing Logic)
-        # Kita harus tahu persis di mana gambar peta digambar di dalam widget MapViewer
         norm_w, norm_h = map_viewer.texture.size
         widget_w, widget_h = map_viewer.size
         
@@ -156,7 +159,6 @@ class NavigationScreen(Screen):
         img_ratio = norm_w / norm_h
         widget_ratio = widget_w / widget_h
         
-        # Logika 'fit' (keep_ratio=True, allow_stretch=True)
         if widget_ratio > img_ratio:
             scale = widget_h / norm_h
             offset_x = (widget_w - norm_w * scale) / 2.0
@@ -166,20 +168,12 @@ class NavigationScreen(Screen):
             offset_x = 0.0
             offset_y = (widget_h - norm_h * scale) / 2.0
             
-        # 4. Tentukan Posisi Akhir Marker
-        # Posisi ini RELATIF terhadap widget MapViewer.
-        # Karena MapViewer dan RobotMarker bersaudara di dalam Scatter,
-        # kita TIDAK PERLU menggunakan 'to_local' atau konversi layar.
         marker_x = (pixel_x * scale) + offset_x + map_viewer.x
         marker_y = (pixel_y * scale) + offset_y + map_viewer.y
         
-        # Terapkan posisi ke Marker
         self.robot_marker.center = (marker_x, marker_y)
-        
-        # 5. Terapkan Rotasi
-        # ROS menggunakan radian (CCW), Kivy menggunakan derajat (CCW).
-        # math.degrees mengkonversi radian ke derajat.
         self.robot_marker.angle = math.degrees(pose['yaw'])
+
 # ==================================
 # KELAS APLIKASI UTAMA
 # ==================================
@@ -189,8 +183,10 @@ class MainApp(App):
 
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
-       #Window.maximize() jika menggunkanan window
+        
+        # Default Fullscreen
         Window.fullscreen = 'auto'
+        
         kv_design = """
 # ==================================
 # ATURAN GLOBAL
@@ -225,11 +221,22 @@ class MainApp(App):
         Rectangle:
             pos: self.pos
             size: self.size
-            
+           
 <MapControlButton@Button>:
     font_size: '30sp'
     size_hint: (1, 1)
-    background_color: 0.2, 0.2, 0.2, 0.5 # Transparansi 0.5
+    background_color: 0.2, 0.2, 0.2, 0.5 
+
+# --- TOMBOL MINIMIZE [ ] ---
+<WindowToggleBtn@Button>:
+    text: '[ ]'
+    font_size: '20sp'
+    bold: True
+    size_hint: None, None
+    size: '50dp', '50dp'
+    background_color: 0.8, 0, 0, 0.5 
+    pos_hint: {'top': 1, 'right': 1}
+    on_press: app.toggle_window_mode()
 
 # ==================================
 # ATURAN WIDGET CUSTOM
@@ -245,11 +252,10 @@ class MainApp(App):
 <MapImage>:
     
 # ==================================
-# LAYOUT LAYAR (BARU & LAMA)
+# LAYOUT LAYAR
 # ==================================
 <HomeScreen>:
     FloatLayout:
-        #... (Layout HomeScreen tidak berubah) ...
         canvas.before:
             Color:
                 rgba: 1, 1, 1, 1
@@ -273,154 +279,151 @@ class MainApp(App):
             on_press: app.root.current = 'main_menu'
 
 <NavSelectionScreen>:
-    BoxLayout:
-        #... (Layout NavSelectionScreen tidak berubah) ...
-        orientation: 'vertical'
-        padding: 20
-        spacing: 10
-        Image:
-            source: 'Choose_your_mission.png' 
-            size_hint_y: 0.2
-            allow_stretch: True
-            keep_ratio: True
+    FloatLayout:
         BoxLayout:
-            orientation: 'horizontal'
+            orientation: 'vertical'
+            padding: 20
             spacing: 10
-            ScrollView:
-                id: map_scroll
-                GridLayout:
-                    id: nav_map_grid
-                    cols: 1
-                    size_hint_y: None
-                    height: self.minimum_height
+            Image:
+                source: 'Choose_your_mission.png' 
+                size_hint_y: 0.2
+                allow_stretch: True
+                keep_ratio: True
+            BoxLayout:
+                orientation: 'horizontal'
+                spacing: 10
+                ScrollView:
+                    id: map_scroll
+                    GridLayout:
+                        id: nav_map_grid
+                        cols: 1
+                        size_hint_y: None
+                        height: self.minimum_height
+                        spacing: 10
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint_x: None
+                    width: '90dp'
                     spacing: 10
-            BoxLayout:
-                orientation: 'vertical'
-                size_hint_x: None
-                width: '90dp'
-                spacing: 10
-                ImageButton:
-                    source: 'scroll_up.png'
-                    on_press: app.scroll_map_list_up()
-                ImageButton:
-                    source: 'scroll_down.png'
-                    on_press: app.scroll_map_list_down()
-        ImageButton:
-            source: 'go_back.png'
-            size_hint_y: None
-            height: '150dp'
-            size_hint_x: 0.8
-            pos_hint: {'center_x': 0.5}
-            on_press: root.manager.current = 'main_menu'
-            
-<NavigationScreen>:
-    name: 'navigation'
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 10
-        spacing: 10
-        FloatLayout:
-            id: map_container
-            size_hint: 1, 1
-            
-            Scatter:
-                id: scatter_map
-                size_hint: (1, 1)
-                # pos_hint DIHAPUS agar bisa digeser
-                do_rotation: False
-                do_scale: True
-                do_translation: False # Geser manual (touch) DIMATIKAN
-                scale_min: 1.0
-                scale_max: 8.0
-                auto_bring_to_front: False
-
-                MapImage:
-                    id: map_viewer
-                    source: ''
-                    allow_stretch: True
-                    keep_ratio: True
-                    size_hint: (None, None)
-                    size: self.parent.size 
-
-            # [ --- PERUBAHAN UKURAN DI SINI --- ]
-
-            # --- TOMBOL ZOOM (Kiri Bawah) ---
-            BoxLayout:
-                orientation: 'vertical'
-                size_hint: (None, None)
-                # Ukuran diubah dari 80dp/170dp menjadi 60dp/130dp
-                size: ('60dp', '130dp') 
-                pos_hint: {'x': 0.02, 'y': 0.02} 
-                spacing: 10
-                MapControlButton:
-                    text: "+"
-                    on_press: app.zoom_in()
-                MapControlButton:
-                    text: "-"
-                    on_press: app.zoom_out()
-            
-            # --- TOMBOL PAN (Tepi) ---
-            MapControlButton:
-                id: dpad_up
-                text: "^"
-                size_hint: (None, None)
-                size: ('60dp', '60dp') # Diubah dari 80dp
-                pos_hint: {'center_x': 0.5, 'top': 0.98} 
-                on_press: app.pan_map_up()
-
-            MapControlButton:
-                id: dpad_down
-                text: "v"
-                size_hint: (None, None)
-                size: ('60dp', '60dp') # Diubah dari 80dp
-                pos_hint: {'center_x': 0.5, 'y': 0.10} 
-                on_press: app.pan_map_down()
-
-            MapControlButton:
-                id: dpad_left
-                text: "<"
-                size_hint: (None, None)
-                size: ('60dp', '60dp') # Diubah dari 80dp
-                pos_hint: {'x': 0.02, 'center_y': 0.5} 
-                on_press: app.pan_map_left()
-
-            MapControlButton:
-                id: dpad_right
-                text: ">"
-                size_hint: (None, None)
-                size: ('60dp', '60dp') # Diubah dari 80dp
-                pos_hint: {'right': 0.98, 'center_y': 0.5} 
-                on_press: app.pan_map_right()
-            
-            # [ --- AKHIR PERUBAHAN UKURAN --- ]
-
-        # Bagian tombol bawah (Status, Navigasi, Back)
-        BoxLayout:
-            #... (Layout ini tidak berubah) ...
-            size_hint_y: None
-            height: '60dp'
-            orientation: 'horizontal'
-            spacing: 10
-            Label:
-                id: navigation_status_label
-                text: 'Status: Pilih titik di peta'
-                font_size: '18sp'
-            ImageButton:
-                id: navigate_button
-                source: 'start_navigation.png'
-                size_hint_y: None
-                height: '110dp'
-                size_hint_x: 1
-                pos_hint: {'center_x': 0.5}
-                disabled: True
-                on_press: app.confirm_navigation_goal()
+                    ImageButton:
+                        source: 'scroll_up.png'
+                        on_press: app.scroll_map_list_up()
+                    ImageButton:
+                        source: 'scroll_down.png'
+                        on_press: app.scroll_map_list_down()
             ImageButton:
                 source: 'go_back.png'
                 size_hint_y: None
-                height: '110dp'
-                size_hint_x: 1
+                height: '150dp'
+                size_hint_x: 0.8
                 pos_hint: {'center_x': 0.5}
-                on_press: app.exit_navigation_mode()
+                on_press: root.manager.current = 'main_menu'
+        
+        WindowToggleBtn:
+           
+<NavigationScreen>:
+    name: 'navigation'
+    FloatLayout:
+        BoxLayout:
+            orientation: 'vertical'
+            padding: 10
+            spacing: 10
+            FloatLayout:
+                id: map_container
+                size_hint: 1, 1
+            
+                Scatter:
+                    id: scatter_map
+                    size_hint: (1, 1)
+                    do_rotation: False
+                    do_scale: True
+                    do_translation: False 
+                    scale_min: 1.0
+                    scale_max: 8.0
+                    auto_bring_to_front: False
+
+                    MapImage:
+                        id: map_viewer
+                        source: ''
+                        allow_stretch: True
+                        keep_ratio: True
+                        size_hint: (None, None)
+                        size: self.parent.size 
+
+                # --- KONTROL NAVIGASI & ZOOM ---
+                BoxLayout:
+                    orientation: 'vertical'
+                    size_hint: (None, None)
+                    size: ('60dp', '130dp') 
+                    pos_hint: {'x': 0.02, 'y': 0.02} 
+                    spacing: 10
+                    MapControlButton:
+                        text: "+"
+                        on_press: app.zoom_in()
+                    MapControlButton:
+                        text: "-"
+                        on_press: app.zoom_out()
+            
+                MapControlButton:
+                    id: dpad_up
+                    text: "^"
+                    size_hint: (None, None)
+                    size: ('60dp', '60dp') 
+                    pos_hint: {'center_x': 0.5, 'top': 0.98} 
+                    on_press: app.pan_map_up()
+
+                MapControlButton:
+                    id: dpad_down
+                    text: "v"
+                    size_hint: (None, None)
+                    size: ('60dp', '60dp')
+                    pos_hint: {'center_x': 0.5, 'y': 0.12} 
+                    on_press: app.pan_map_down()
+
+                MapControlButton:
+                    id: dpad_left
+                    text: "<"
+                    size_hint: (None, None)
+                    size: ('60dp', '60dp')
+                    pos_hint: {'x': 0.02, 'center_y': 0.5} 
+                    on_press: app.pan_map_left()
+
+                MapControlButton:
+                    id: dpad_right
+                    text: ">"
+                    size_hint: (None, None)
+                    size: ('60dp', '60dp') 
+                    pos_hint: {'right': 0.98, 'center_y': 0.5} 
+                    on_press: app.pan_map_right()
+            
+            # Bagian Tombol Bawah
+            BoxLayout:
+                size_hint_y: None
+                height: '60dp'
+                orientation: 'horizontal'
+                spacing: 10
+                Label:
+                    id: navigation_status_label
+                    text: 'Status: Pilih titik di peta'
+                    font_size: '18sp'
+                ImageButton:
+                    id: navigate_button
+                    source: 'start_navigation.png'
+                    size_hint_y: None
+                    height: '110dp'
+                    size_hint_x: 1
+                    pos_hint: {'center_x': 0.5}
+                    disabled: True
+                    on_press: app.confirm_navigation_goal()
+                ImageButton:
+                    source: 'go_back.png'
+                    size_hint_y: None
+                    height: '110dp'
+                    size_hint_x: 1
+                    pos_hint: {'center_x': 0.5}
+                    on_press: app.exit_navigation_mode()
+        
+        WindowToggleBtn:
 
 # ==================================
 # SCREEN MANAGER UTAMA
@@ -433,153 +436,159 @@ ScreenManager:
         
     Screen:
         name: 'main_menu'
-        BoxLayout:
-            orientation: 'vertical'
-            # Padding: Jarak dari pinggir layar (kiri, atas, kanan, bawah)
-            padding: [20, 20, 20, 20] 
-            # Spacing: Jarak antar tombol
-            spacing: 20
+        FloatLayout:
+            BoxLayout:
+                orientation: 'vertical'
+                padding: [20, 20, 20, 20] 
+                spacing: 20
             
-            Image:
-            	source:'waiter_bot_control_center.png'
-            	size_hint_y: None
-            	height:'275dp'
-            	allow_stretch: True
-            	keep_ratio: True
+                Image:
+                    source:'waiter_bot_control_center.png'
+                    size_hint_y: None
+                    height:'275dp'
+                    allow_stretch: True
+                    keep_ratio: True
 
-            # --- TOMBOL 1 ---
-            ImageButton:
-                source: 'control_robot.png'
-                # [PENTING] Matikan size_hint_y agar bisa atur height manual
-                size_hint_y: None
-                # [ATUR DISINI] Ubah angka 150dp ini untuk memperbesar/memperkecil TINGGI gambar
-                height: '220dp'
-                # Opsional: Atur lebar relatif (0.8 = 80% lebar layar) agar gambar tidak gepeng
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                on_press: app.go_to_controller_mode()
+                ImageButton:
+                    source: 'control_robot.png'
+                    size_hint_y: None
+                    height: '220dp'
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    on_press: app.go_to_controller_mode()
 
-            # --- TOMBOL 2 ---
-            ImageButton:
-                source: 'make_a_map.png'
-                size_hint_y: None
-                # [ATUR DISINI] Sesuaikan tingginya
-                height: '220dp'
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                on_press: sm.current = 'pre_mapping'
+                ImageButton:
+                    source: 'make_a_map.png'
+                    size_hint_y: None
+                    height: '220dp'
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    on_press: sm.current = 'pre_mapping'
 
-            # --- TOMBOL 3 ---
-            ImageButton:
-                source: 'do_navigation.png'
-                size_hint_y: None
-                # [ATUR DISINI] Sesuaikan tingginya
-                height: '220dp'
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                on_press: sm.current = 'nav_selection'
-                
-    # ... (Screen lainnya: pre_mapping, controller, mapping, dll TETAP SAMA) ...
+                ImageButton:
+                    source: 'do_navigation.png'
+                    size_hint_y: None
+                    height: '220dp'
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    on_press: sm.current = 'nav_selection'
+            
+            WindowToggleBtn:
+               
     Screen:
         name: 'pre_mapping'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: [40,5,40,40]
-            spacing: 20
-            Image:
-            	source:'name_your_map.png'
-            	size_hint_y: None
-            	height:'380dp'
-            	allow_stretch: True
-            	keep_ratio: True
-            TextInput:
-                id: map_name_input
-                hint_text: 'Contoh: peta_lantai_1'
-                font_size: '50sp'
-                multiline: False
-                size_hint_y: None
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                height: '75dp'
-            Widget:
-            	size_hint_y: None
-            	height: '30dp'
-            ImageButton:
-                source: 'start_mapping.png'
-                size_hint_y: None
-                height: '220dp'
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                on_press: app.go_to_mapping_mode(map_name_input.text)
-                disabled: not map_name_input.text
-            Widget:
-            	size_hint_y: None
-            	height: '50dp'
-            ImageButton:
-                source: 'go_back.png'
-                size_hint_y: None
-                height: '150dp'
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                on_press: sm.current = 'main_menu'
+        FloatLayout:
+            BoxLayout:
+                orientation: 'vertical'
+                padding: [40, 5, 40, 40]
+                spacing: 15 
+
+                Image:
+                    source: 'name_your_map.png'
+                    size_hint_y: None
+                    height: '340dp'
+                    allow_stretch: True
+                    keep_ratio: True
+
+                TextInput:
+                    id: map_name_input
+                    hint_text: 'Contoh: peta_lantai_1'
+                    font_size: '50sp'
+                    multiline: False
+                    size_hint_y: None
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    height: '120dp'
+                    padding_y: [30, 0]
+
+                Widget:
+                    size_hint_y: None
+                    height: '40dp'
+
+                ImageButton:
+                    source: 'start_mapping.png'
+                    size_hint_y: None
+                    height: '220dp'
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    on_press: app.go_to_mapping_mode(map_name_input.text)
+                    disabled: not map_name_input.text
+                
+                Widget:
+                    size_hint_y: None
+                    height: '20dp'
+
+                ImageButton:
+                    source: 'go_back.png'
+                    size_hint_y: None
+                    height: '150dp'
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    on_press: sm.current = 'main_menu'
+            
+            WindowToggleBtn:
+
     Screen:
         name: 'controller'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 85
-            Image:
-            	source:'use_controller_move_the_robot.png'
-            	size_hint_y: None
-            	height:'550dp'
-            	allow_stretch: True
-            	keep_ratio: True
-            ImageButton:
-                source: 'go_back.png'
-                size_hint_y: None
-                height: '150dp'
-                size_hint_x: 0.8
-                pos_hint: {'center_x': 0.5}
-                on_press: app.exit_controller_mode()
+        FloatLayout:
+            BoxLayout:
+                orientation: 'vertical'
+                padding: 40
+                spacing: 85
+                Image:
+                    source:'use_controller_move_the_robot.png'
+                    size_hint_y: None
+                    height:'550dp'
+                    allow_stretch: True
+                    keep_ratio: True
+                ImageButton:
+                    source: 'go_back.png'
+                    size_hint_y: None
+                    height: '150dp'
+                    size_hint_x: 0.8
+                    pos_hint: {'center_x': 0.5}
+                    on_press: app.exit_controller_mode()
+            
+            WindowToggleBtn:
+
     Screen:
         name: 'mapping'
-        BoxLayout:
-            orientation: 'vertical'
-            padding: 40
-            spacing: 20
-            
-            Image:
-                source: 'mapping_on_progress.png'
-                allow_stretch: True
-                keep_ratio: True
-                size_hint_y: 0.8
-            
-            # [ --- PERUBAHAN TOMBOL MAPPING MENJADI PNG --- ]
+        FloatLayout:
             BoxLayout:
-                orientation: 'horizontal'
+                orientation: 'vertical'
+                padding: 40
                 spacing: 20
-                size_hint_y: None
-                # Saya naikkan sedikit tingginya agar gambar tombol leluasa
-                height: '120dp' 
+            
+                Image:
+                    source: 'mapping_on_progress.png'
+                    allow_stretch: True
+                    keep_ratio: True
+                    size_hint_y: 0.8
+            
+                BoxLayout:
+                    orientation: 'horizontal'
+                    spacing: 20
+                    size_hint_y: None
+                    height: '120dp' 
                 
-                # Tombol Selesai/Simpan
-                ImageButton:
-                    source: 'done_save_map.png' # Pastikan file ini ada
-                    size_hint_y: None 
-                    height: '150dp'
-                    allow_stretch: True
-                    keep_ratio: True
-                    # size_hint_x default 1.0 (bagi dua rata dengan tombol sebelah)
-                    on_press: app.exit_mapping_mode()
+                    ImageButton:
+                        source: 'done_save_map.png' 
+                        size_hint_y: None 
+                        height: '150dp'
+                        allow_stretch: True
+                        keep_ratio: True
+                        on_press: app.exit_mapping_mode()
                     
-                # Tombol Batalkan
-                ImageButton:
-                    source: 'cancel.png' # Pastikan file ini ada
-                    size_hint_y: None 
-                    height: '150dp'    
-                    allow_stretch: True
-                    keep_ratio: True
-                    on_press: app.cancel_mapping_mode()
+                    ImageButton:
+                        source: 'cancel.png' 
+                        size_hint_y: None 
+                        height: '150dp'    
+                        allow_stretch: True
+                        keep_ratio: True
+                        on_press: app.cancel_mapping_mode()
+            
+            WindowToggleBtn:
+
     NavSelectionScreen:
         name: 'nav_selection'
     NavigationScreen:
@@ -592,17 +601,20 @@ ScreenManager:
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
     
+    def toggle_window_mode(self):
+        if Window.fullscreen == 'auto':
+            Window.fullscreen = False
+            Window.maximize()
+        else:
+            Window.fullscreen = 'auto'
+
     def _get_map_scatter(self):
-        """Helper untuk mendapatkan widget Scatter."""
         try:
             return self.root.get_screen('navigation').ids.scatter_map
         except Exception:
             return None
 
-    # Fungsi Python TIDAK PERLU DIUBAH sama sekali
-    # Mereka sudah mereferensikan 'id', bukan ukuran.
     def set_dpad_visibility(self, is_visible):
-        """Mengatur visibilitas semua tombol D-Pad."""
         try:
             root_screen = self.root.get_screen('navigation')
             opacity_val = 1.0 if is_visible else 0.0
@@ -636,7 +648,7 @@ ScreenManager:
                 self.set_dpad_visibility(False)
                 root_screen = self.root.get_screen('navigation')
                 scatter.pos = root_screen.ids.map_container.pos
-            
+           
     def pan_map_up(self):
         scatter = self._get_map_scatter()
         if scatter:
@@ -657,7 +669,6 @@ ScreenManager:
         if scatter:
             scatter.x -= self.PAN_STEP
 
-    # --- FUNGSI LAMA (Tidak diubah) ---
     def scroll_map_list_up(self):
         try:
             scroll = self.root.get_screen('nav_selection').ids.map_scroll
@@ -731,7 +742,7 @@ pose:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
             screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
-            
+           
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -755,7 +766,7 @@ pose:
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
     
     def exit_mapping_mode(self):
-        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\\nMohon tunggu.')
+        self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\nMohon tunggu.')
         Clock.schedule_once(self._start_stop_mapping_thread, 0.1)
 
     def _start_stop_mapping_thread(self, dt):
@@ -766,7 +777,7 @@ pose:
         Clock.schedule_once(self._go_to_main_menu)
 
     def cancel_mapping_mode(self):
-        self.update_status_label('mapping', 'mapping_status_label', 'Membatalkan...\\nTidak menyimpan peta.')
+        self.update_status_label('mapping', 'mapping_status_label', 'Membatalkan...\nTidak menyimpan peta.')
         Clock.schedule_once(self._start_cancel_mapping_thread, 0.1)
 
     def _start_cancel_mapping_thread(self, dt):
@@ -775,7 +786,7 @@ pose:
     def _thread_safe_cancel_mapping(self):
         self.manager.cancel_mapping()
         Clock.schedule_once(self._go_to_main_menu)
-        
+       
     @mainthread
     def _go_to_main_menu(self, *args):
         self.root.current = 'main_menu'
