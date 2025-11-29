@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from kivy.config import Config
+Config.set('kivy', 'keyboard_mode', 'systemanddock')
+if Config.has_section('input'):
+	for key, value in Config.items('input'):
+		Config.remove_option('input', key)
+Config.set('input', 'mouse', 'mouse,disable_multitouch')
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.uix.screenmanager import Screen
@@ -456,8 +462,8 @@ ScreenManager:
         name: 'pre_mapping'
         BoxLayout:
             orientation: 'vertical'
-            padding: 40
-            spacing: 35
+            padding: [40,5,40,40]
+            spacing: 20
             Image:
             	source:'name_your_map.png'
             	size_hint_y: None
@@ -470,7 +476,12 @@ ScreenManager:
                 font_size: '50sp'
                 multiline: False
                 size_hint_y: None
-                height: '80dp'
+                size_hint_x: 0.8
+                pos_hint: {'center_x': 0.5}
+                height: '75dp'
+            Widget:
+            	size_hint_y: None
+            	height: '30dp'
             ImageButton:
                 source: 'start_mapping.png'
                 size_hint_y: None
@@ -479,6 +490,9 @@ ScreenManager:
                 pos_hint: {'center_x': 0.5}
                 on_press: app.go_to_mapping_mode(map_name_input.text)
                 disabled: not map_name_input.text
+            Widget:
+            	size_hint_y: None
+            	height: '50dp'
             ImageButton:
                 source: 'go_back.png'
                 size_hint_y: None
