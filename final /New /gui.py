@@ -94,7 +94,7 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         self.load_map_image(app.manager.current_map_name)
         self.ids.navigate_button.disabled = True
-        
+       
         map_viewer = self.ids.map_viewer
         if map_viewer.marker and map_viewer.marker.parent:
             map_viewer.remove_widget(map_viewer.marker)
@@ -104,12 +104,12 @@ class NavigationScreen(Screen):
             source = 'robot_arrow.png' if os.path.exists('robot_arrow.png') else 'atlas://data/images/defaulttheme/checkbox_on'
             self.robot_marker = RobotMarker(source=source, size_hint=(None, None), size=(30, 30), allow_stretch=True, opacity=0)
             self.ids.scatter_map.add_widget(self.robot_marker)
-        
+       
         # Reset zoom DAN pos
         scatter = self.ids.scatter_map
         scatter.scale = 1.0
         scatter.pos = self.ids.map_container.pos 
-        
+       
         app.set_dpad_visibility(False)
 
         self.update_event = Clock.schedule_interval(self.update_robot_display, 0.1)
@@ -136,29 +136,29 @@ class NavigationScreen(Screen):
         app = App.get_running_app()
         pose = app.manager.get_robot_pose()
         map_viewer = self.ids.map_viewer
-        
+       
         if pose is None or not app.manager.map_metadata or not map_viewer.texture:
             if self.robot_marker: self.robot_marker.opacity = 0
             return
-            
+           
         self.robot_marker.opacity = 1
-        
+       
         meta = app.manager.map_metadata
         resolution = meta.get('resolution', 0.05)
         origin_x = meta['origin'][0]
         origin_y = meta['origin'][1]
-        
+       
         pixel_x = (pose['x'] - origin_x) / resolution
         pixel_y = (pose['y'] - origin_y) / resolution
-        
+       
         norm_w, norm_h = map_viewer.texture.size
         widget_w, widget_h = map_viewer.size
-        
+       
         if norm_w == 0 or norm_h == 0: return
-        
+       
         img_ratio = norm_w / norm_h
         widget_ratio = widget_w / widget_h
-        
+       
         if widget_ratio > img_ratio:
             scale = widget_h / norm_h
             offset_x = (widget_w - norm_w * scale) / 2.0
@@ -167,10 +167,10 @@ class NavigationScreen(Screen):
             scale = widget_w / norm_w
             offset_x = 0.0
             offset_y = (widget_h - norm_h * scale) / 2.0
-            
+           
         marker_x = (pixel_x * scale) + offset_x + map_viewer.x
         marker_y = (pixel_y * scale) + offset_y + map_viewer.y
-        
+       
         self.robot_marker.center = (marker_x, marker_y)
         self.robot_marker.angle = math.degrees(pose['yaw'])
 
@@ -184,9 +184,14 @@ class MainApp(App):
     def build(self):
         self.manager = RosManager(status_callback=self.update_status_label)
         
+        # --- [SUPERVISOR] Variabel untuk fitur Supervisor ---
+        self.nav_goal_coords = None  # Menyimpan koordinat target (x, y)
+        self.nav_status_event = None # Menyimpan jadwal Clock pengecekan
+        # ----------------------------------------------------
+       
         # Default Fullscreen
         Window.fullscreen = 'auto'
-        
+       
         kv_design = """
 # ==================================
 # ATURAN GLOBAL
@@ -221,7 +226,7 @@ class MainApp(App):
         Rectangle:
             pos: self.pos
             size: self.size
-           
+          
 <MapControlButton@Button>:
     font_size: '30sp'
     size_hint: (1, 1)
@@ -250,7 +255,7 @@ class MainApp(App):
     canvas.after:
         PopMatrix
 <MapImage>:
-    
+   
 # ==================================
 # LAYOUT LAYAR
 # ==================================
@@ -318,9 +323,9 @@ class MainApp(App):
                 size_hint_x: 0.8
                 pos_hint: {'center_x': 0.5}
                 on_press: root.manager.current = 'main_menu'
-        
+       
         WindowToggleBtn:
-           
+          
 <NavigationScreen>:
     name: 'navigation'
     FloatLayout:
@@ -331,7 +336,7 @@ class MainApp(App):
             FloatLayout:
                 id: map_container
                 size_hint: 1, 1
-            
+           
                 Scatter:
                     id: scatter_map
                     size_hint: (1, 1)
@@ -363,7 +368,7 @@ class MainApp(App):
                     MapControlButton:
                         text: "-"
                         on_press: app.zoom_out()
-            
+           
                 MapControlButton:
                     id: dpad_up
                     text: "^"
@@ -395,7 +400,7 @@ class MainApp(App):
                     size: ('60dp', '60dp') 
                     pos_hint: {'right': 0.98, 'center_y': 0.5} 
                     on_press: app.pan_map_right()
-            
+           
             # Bagian Tombol Bawah
             BoxLayout:
                 size_hint_y: None
@@ -422,7 +427,7 @@ class MainApp(App):
                     size_hint_x: 1
                     pos_hint: {'center_x': 0.5}
                     on_press: app.exit_navigation_mode()
-        
+       
         WindowToggleBtn:
 
 # ==================================
@@ -430,10 +435,10 @@ class MainApp(App):
 # ==================================
 ScreenManager:
     id: sm
-    
+   
     HomeScreen:
         name: 'home' 
-        
+       
     Screen:
         name: 'main_menu'
         FloatLayout:
@@ -441,7 +446,7 @@ ScreenManager:
                 orientation: 'vertical'
                 padding: [20, 20, 20, 20] 
                 spacing: 20
-            
+           
                 Image:
                     source:'waiter_bot_control_center.png'
                     size_hint_y: None
@@ -472,9 +477,9 @@ ScreenManager:
                     size_hint_x: 0.8
                     pos_hint: {'center_x': 0.5}
                     on_press: sm.current = 'nav_selection'
-            
+           
             WindowToggleBtn:
-               
+              
     Screen:
         name: 'pre_mapping'
         FloatLayout:
@@ -513,7 +518,7 @@ ScreenManager:
                     pos_hint: {'center_x': 0.5}
                     on_press: app.go_to_mapping_mode(map_name_input.text)
                     disabled: not map_name_input.text
-                
+               
                 Widget:
                     size_hint_y: None
                     height: '20dp'
@@ -525,7 +530,7 @@ ScreenManager:
                     size_hint_x: 0.8
                     pos_hint: {'center_x': 0.5}
                     on_press: sm.current = 'main_menu'
-            
+           
             WindowToggleBtn:
 
     Screen:
@@ -548,7 +553,7 @@ ScreenManager:
                     size_hint_x: 0.8
                     pos_hint: {'center_x': 0.5}
                     on_press: app.exit_controller_mode()
-            
+           
             WindowToggleBtn:
 
     Screen:
@@ -558,19 +563,19 @@ ScreenManager:
                 orientation: 'vertical'
                 padding: 40
                 spacing: 20
-            
+           
                 Image:
                     source: 'mapping_on_progress.png'
                     allow_stretch: True
                     keep_ratio: True
                     size_hint_y: 0.8
-            
+           
                 BoxLayout:
                     orientation: 'horizontal'
                     spacing: 20
                     size_hint_y: None
                     height: '120dp' 
-                
+               
                     ImageButton:
                         source: 'done_save_map.png' 
                         size_hint_y: None 
@@ -578,7 +583,7 @@ ScreenManager:
                         allow_stretch: True
                         keep_ratio: True
                         on_press: app.exit_mapping_mode()
-                    
+                  
                     ImageButton:
                         source: 'cancel.png' 
                         size_hint_y: None 
@@ -586,7 +591,7 @@ ScreenManager:
                         allow_stretch: True
                         keep_ratio: True
                         on_press: app.cancel_mapping_mode()
-            
+           
             WindowToggleBtn:
 
     NavSelectionScreen:
@@ -600,7 +605,7 @@ ScreenManager:
     # ==================================
     # FUNGSI-FUNGSI LOGIKA
     # ==================================
-    
+   
     def toggle_window_mode(self):
         if Window.fullscreen == 'auto':
             Window.fullscreen = False
@@ -619,12 +624,12 @@ ScreenManager:
             root_screen = self.root.get_screen('navigation')
             opacity_val = 1.0 if is_visible else 0.0
             disabled_val = not is_visible
-            
+           
             root_screen.ids.dpad_up.opacity = opacity_val
             root_screen.ids.dpad_down.opacity = opacity_val
             root_screen.ids.dpad_left.opacity = opacity_val
             root_screen.ids.dpad_right.opacity = opacity_val
-            
+           
             root_screen.ids.dpad_up.disabled = disabled_val
             root_screen.ids.dpad_down.disabled = disabled_val
             root_screen.ids.dpad_left.disabled = disabled_val
@@ -642,13 +647,13 @@ ScreenManager:
         scatter = self._get_map_scatter()
         if scatter:
             scatter.scale = max(scatter.scale / 1.2, scatter.scale_min)
-            
+           
             if scatter.scale <= 1.0:
                 scatter.scale = 1.0 
                 self.set_dpad_visibility(False)
                 root_screen = self.root.get_screen('navigation')
                 scatter.pos = root_screen.ids.map_container.pos
-           
+          
     def pan_map_up(self):
         scatter = self._get_map_scatter()
         if scatter:
@@ -684,7 +689,7 @@ ScreenManager:
             scroll.scroll_y = new_scroll
         except Exception as e:
             print(f"Error scrolling down: {e}")
-    
+   
     def calculate_ros_goal(self, touch, image_widget):
         screen = self.root.get_screen('navigation')
         if not image_widget.texture or not self.manager.map_metadata:
@@ -738,11 +743,71 @@ pose:
             try:
                 subprocess.Popen(command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 print(f"INFO: Perintah GOAL ({map_x:.2f}, {map_y:.2f}) dikirim ke /move_base_simple/goal")
+                
+                # --- [SUPERVISOR] Mulai Pengawasan Jarak ---
+                self.nav_goal_coords = (map_x, map_y)
+                if self.nav_status_event:
+                    self.nav_status_event.cancel()
+                self.nav_status_event = Clock.schedule_interval(self.check_navigation_status, 0.5)
+                # -------------------------------------------
+
             except Exception as e:
                 print(f"ERROR: Gagal mengirim perintah goal: {e}")
             screen.ids.navigate_button.disabled = True
             screen.ids.navigation_status_label.text = "Status: Perintah Goal Terkirim!"
-           
+    
+    # --- [SUPERVISOR] Fungsi Pengecekan Jarak ---
+    def check_navigation_status(self, dt):
+        """Mengecek jarak robot ke goal setiap 0.5 detik."""
+        if not self.nav_goal_coords:
+            return False 
+
+        current_pose = self.manager.get_robot_pose()
+        
+        if current_pose:
+            dx = current_pose['x'] - self.nav_goal_coords[0]
+            dy = current_pose['y'] - self.nav_goal_coords[1]
+            distance = math.hypot(dx, dy)
+            
+            # Cek Toleransi (20 cm)
+            if distance < 0.20: 
+                print(f"TARGET TERCAPAI (Jarak {distance:.2f}m). Melakukan Force Stop.")
+                self.finish_navigation_success()
+                return False 
+        
+        return True 
+
+    # --- [SUPERVISOR] Fungsi Finish & Cleanup ---
+    def finish_navigation_success(self):
+        """Dipanggil saat robot sampai di target."""
+        # 1. Hapus Marker 'X' dari Peta
+        try:
+            screen = self.root.get_screen('navigation')
+            map_viewer = screen.ids.map_viewer
+            if map_viewer.marker:
+                map_viewer.remove_widget(map_viewer.marker)
+                map_viewer.marker = None
+        except Exception as e:
+            print(f"Error menghapus marker: {e}")
+
+        # 2. Paksa Robot Berhenti (Kirim STOP Command)
+        # Mencoba menggunakan fungsi manager yang sudah ada (lebih aman)
+        if hasattr(self.manager, '_send_stop_command'):
+            self.manager._send_stop_command()
+        else:
+            # Fallback manual jika manager belum diupdate
+            subprocess.Popen('rostopic pub -1 /move_base/cancel actionlib_msgs/GoalID -- {}', shell=True)
+            subprocess.Popen('rostopic pub -1 /cmd_vel geometry_msgs/Twist "linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}"', shell=True)
+
+        # 3. Update Status GUI
+        screen = self.root.get_screen('navigation')
+        screen.ids.navigation_status_label.text = "Status: Target Tercapai!"
+        screen.ids.navigate_button.disabled = True
+        
+        # Reset variabel
+        self.nav_goal_coords = None
+    # ---------------------------------------------
+          
     def go_to_controller_mode(self):
         status = self.manager.start_controller()
         self.update_status_label('controller', 'controller_status_label', status)
@@ -764,7 +829,7 @@ pose:
         screen = self.root.get_screen('mapping')
         if 'mapping_status_label' in screen.ids: screen.ids.mapping_status_label.text = status
         if 'current_map_name_label' in screen.ids: screen.ids.current_map_name_label.text = f"Memetakan: {map_name}"
-    
+   
     def exit_mapping_mode(self):
         self.update_status_label('mapping', 'mapping_status_label', 'Menyimpan peta...\nMohon tunggu.')
         Clock.schedule_once(self._start_stop_mapping_thread, 0.1)
@@ -786,7 +851,7 @@ pose:
     def _thread_safe_cancel_mapping(self):
         self.manager.cancel_mapping()
         Clock.schedule_once(self._go_to_main_menu)
-       
+      
     @mainthread
     def _go_to_main_menu(self, *args):
         self.root.current = 'main_menu'
@@ -796,6 +861,11 @@ pose:
         self.root.current = 'navigation'
 
     def exit_navigation_mode(self):
+        # --- [SUPERVISOR] Matikan checker jika keluar ---
+        if self.nav_status_event:
+            self.nav_status_event.cancel()
+            self.nav_status_event = None
+        # ------------------------------------------------
         self.manager.stop_navigation()
         self.root.current = 'main_menu'
 
